@@ -474,6 +474,76 @@ function upcoming(days) {
   return out.sort((a, b) => a.due - b.due);
 }
 
+// ---------- Holiday ----------
+// Only suggestions: the schedule and the reminders stay as they are.
+function holiday() {
+  const h = D.settings.holiday; if (!h || !h.from || !h.to) return null;
+  const from = dayStart(h.from + 'T12:00:00'), to = dayStart(h.to + 'T12:00:00');
+  if (to <= from || today() > to) return null;
+  return { from, to, days: daysBetween(from, to), away: today() > from };
+}
+// What to do with one plant: water on which day, does that last until we are back, if not when someone should come.
+function holidayPlan(p, h) {
+  const w = waterStatus(p); const I = waterInfo(p, h.from).days; const F = h.from, T = h.to;
+  const n = w.next < today() ? today() : dayStart(w.next);
+  if (n > T) return { kind: 'after', next: n };
+  let usual = n, water;
+  if (n > F) {
+    // due during the trip: water on the leaving day instead, unless it was watered too recently for that
+    if (!w.never && daysBetween(w.last, F) < I / 2) return { kind: 'help', water: null, help: n, usual: n };
+    water = F;
+  } else {
+    while (daysBetween(usual, F) >= I) usual = addDays(usual, I); // the last watering before leaving
+    // when that does not last, waiting a little until the leaving day may be enough
+    const lasts = daysBetween(usual, T) <= I;
+    water = !lasts && daysBetween(usual, F) <= Math.max(2, Math.round(I / 4)) ? F : usual;
+  }
+  const lastsTo = addDays(water, I);
+  return lastsTo >= T ? { kind: 'ok', water, usual } : { kind: 'help', water, help: lastsTo, usual };
+}
+function holidayItems(h) {
+  const order = { ok: 0, help: 1, after: 2 };
+  return D.plants.map(p => Object.assign({ p }, holidayPlan(p, h))).sort((a, b) => order[a.kind] - order[b.kind] || (a.water || a.help || a.next) - (b.water || b.help || b.next));
+}
+function holidayText(it, h) {
+  const day = d => sameDay(d, h.from) ? fmtDate(d) + ' (the day you leave)' : sameDay(d, today()) ? 'today' : fmtDate(d);
+  const moved = it.water && it.usual && !sameDay(it.water, it.usual) ? ' instead of ' + fmtDate(it.usual) : '';
+  if (it.kind === 'after') return 'No change: next watering ' + fmtDate(it.next) + ', after you are back.';
+  if (it.kind === 'ok') return 'Water on ' + day(it.water) + moved + ': that lasts until you are back.';
+  return (it.water ? 'Water on ' + day(it.water) + moved + '. ' : 'It was just watered. ') + 'It does not last ' + h.days + ' days: ask someone to water it around ' + fmtDate(it.help) + '.';
+}
+function sameDay(a, b) { return daysBetween(a, b) === 0; }
+function holidayCard(where) {
+  const h = holiday();
+  if (where === 'today' && !h) return '';
+  let html = '<div class="card"><h2>🧳 Holiday</h2>';
+  if (h && h.away) {
+    const due = D.plants.map(p => ({ p, w: waterStatus(p) })).filter(x => x.w.next <= h.to).sort((a, b) => a.w.next - b.w.next);
+    html += '<div class="muted" style="margin-bottom:6px">Away until ' + fmtDate(h.to) + '.' + (due.length ? ' These need water before you are back:' : ' All plants last until you are back.') + '</div>';
+    for (const x of due) html += '<div class="item" data-open="' + x.p.id + '">' + thumb(x.p) + '<div class="grow"><div class="name">' + esc(plantName(x.p)) + '</div><div class="muted">💧 around ' + fmtDate(x.w.next < today() ? today() : x.w.next) + '</div></div></div>';
+  } else if (h) {
+    html += '<div style="font-weight:600;margin-bottom:6px">' + fmtDate(h.from) + ' – ' + fmtDate(h.to) + ' · ' + h.days + ' days</div>';
+    const items = holidayItems(h);
+    for (const it of items) html += '<div class="item" data-open="' + it.p.id + '">' + thumb(it.p) + '<div class="grow"><div class="name">' + esc(plantName(it.p)) + ' ' +
+      { ok: '<span class="tag today">fine</span>', help: '<span class="tag late">needs someone</span>', after: '<span class="tag info">no change</span>' }[it.kind] + '</div><div class="muted">' + esc(holidayText(it, h)) + '</div></div></div>';
+    if (items.some(it => it.kind === 'help')) html += '<div class="note warn" style="margin-top:8px">If nobody can come: water well, move it back from a sunny window, and stand the pot on a tray of wet pebbles. Plants grouped together stay moist longer.</div>';
+  }
+  if (where === 'settings' || !h) {
+    const v = D.settings.holiday && h ? D.settings.holiday : { from: '', to: '' };
+    html += (h ? '' : '<div class="muted" style="margin-bottom:8px">Going away? Type in when, and the app says when to water each plant and which ones need someone.</div>') +
+      '<div class="row" style="margin-top:8px"><div class="grow"><label class="muted">Leaving on</label><input id="holFrom" type="date" value="' + esc(v.from) + '"></div><div class="grow"><label class="muted">Back on</label><input id="holTo" type="date" value="' + esc(v.to) + '"></div></div>' +
+      '<div class="row" style="margin-top:8px"><button class="btn primary grow" data-holsave>' + (h ? 'Change' : 'Plan holiday') + '</button>' + (h ? '<button class="btn grow" data-holclear>Remove</button>' : '') + '</div>';
+  } else html += '<div style="margin-top:8px"><button class="linkbtn" data-holedit>Change dates</button></div>';
+  return html + '</div>';
+}
+function saveHoliday() {
+  const f = document.getElementById('holFrom').value, t = document.getElementById('holTo').value;
+  if (!/^\d{4}-\d\d-\d\d$/.test(f) || !/^\d{4}-\d\d-\d\d$/.test(t)) { toast('Please pick both days.'); return; }
+  if (t <= f) { toast('The day you are back must be after the day you leave.'); return; }
+  if (t < isoDay(today())) { toast('That holiday is already over.'); return; }
+  D.settings.holiday = { from: f, to: t }; save(); tab = 'today'; render(); window.scrollTo(0, 0); toast('Holiday planned: see the Today tab');
+}
+
 // ---------- Actions (with undo) ----------
 let undoState = null, toastTimer = null;
 function snapshot() { return JSON.stringify(D); }
@@ -483,7 +553,8 @@ function act(p, kind) {
   if (kind === 'water') {
     const w = waterStatus(p);
     // watered 2+ days before it was due: its soil dries faster than the profile says
-    if (!w.never && w.due >= 2) p.factor = Math.max(0.6, (p.factor || 1) * 0.93);
+    const h = holiday(); const forTrip = h && !h.away && daysBetween(today(), h.from) <= 1;
+    if (!w.never && w.due >= 2 && !forTrip) p.factor = Math.max(0.6, (p.factor || 1) * 0.93);
     p.snooze = null;
   }
   p.log.push(cloudActive() ? { t: kind, at, by: myName() } : { t: kind, at });
@@ -576,6 +647,7 @@ function renderToday() {
       '<button class="btn small primary" data-do="' + it.kind + '" data-id="' + p.id + '">✓ ' + { water: 'Watered', feed: 'Fed', mist: 'Misted' }[it.kind] + '</button></div></div></div>';
   }
   html += '</div>';
+  html += holidayCard('today');
   const up = upcoming(7);
   if (up.length) {
     html += '<div class="card"><h2>Next 7 days</h2>';
@@ -1526,6 +1598,7 @@ function renderSettings() {
     '</div><button class="btn small" data-setloc>' + (l ? 'Change' : 'Set') + '</button></div></div>';
   html += sharingCard();
   html += remindersCard();
+  html += holidayCard('settings');
   html += climateCard();
   html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">' + (cloudActive() ? 'Your home is saved online. A backup file of its plants is still handy now and then.' : 'Your plants are saved on this phone. Save a backup file now and then.') + '</div>' +
     '<div class="row"><button class="btn grow" data-export>Save backup</button><button class="btn grow" data-import>Restore backup</button></div><input type="file" id="importInput" accept="application/json,.json" class="hidden"></div>';
@@ -1557,7 +1630,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar],[data-identify],[data-identpick],[data-identclear],[data-pickgen],[data-caretype]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar],[data-identify],[data-identpick],[data-identclear],[data-pickgen],[data-caretype],[data-holsave],[data-holclear],[data-holedit]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -1565,6 +1638,9 @@ document.addEventListener('click', e => {
   if (d.open) return openPlant(d.open);
   if ('add' in d) return openAdd();
   if ('climateSave' in d) return saveClimate();
+  if ('holsave' in d) return saveHoliday();
+  if ('holclear' in d) { D.settings.holiday = null; save(); render(); toast('Holiday removed'); return; }
+  if ('holedit' in d) { tab = 'settings'; render(); const el = document.getElementById('holFrom'); if (el) el.scrollIntoView({ block: 'center' }); return; }
   if ('climate' in d) { const f = t.closest('.card').querySelector('#climateForm'); f.classList.toggle('hidden'); if (!f.classList.contains('hidden')) f.querySelector('input').focus(); return; }
   if (d.pick) { draft = { sp: d.pick, nick: '', room: rooms()[0] || '', photo: pendingPhoto, last: '7', dir: null, dist: 'near' }; pendingPhoto = null; renderAdd(''); document.getElementById('addPage').scrollTop = 0; return; }
   if ('addsave' in d) return saveDraft();
