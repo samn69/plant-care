@@ -1,6 +1,6 @@
 // Keeps the app usable offline. The page is fetched fresh when online (falls back to the
 // saved copy after 3 s or with no signal).
-const CACHE = 'plant-care-v3';
+const CACHE = 'plant-care-v4';
 // Firebase (sign-in and shared homes) is versioned, so it is served from the cache once saved.
 const LIBS = ['app', 'auth', 'firestore'].map(m => 'https://www.gstatic.com/firebasejs/10.14.1/firebase-' + m + '-compat.js');
 const FILES = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
