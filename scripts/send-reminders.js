@@ -4,7 +4,7 @@
 // notification to each of their phones. Nothing is sent on days with nothing to do.
 'use strict';
 
-const VAPID_PUBLIC = 'BBbJ7jNCgZMfquOV3MhkI2PFwtvE_bZl9f55PUcbXBUtTPsOEfdHi_yaAPZBbCoOEVHeo4SULM94NfoUsAGUfcg';
+const VAPID_PUBLIC = 'BEA1ZxKSrqJegIl2Wi4S0aDf0EPT_-xkdd70zDuRdJBqLcpvublaJJqIC3z-U9ffdaSHrbeN9PvVW9qR_3dm-PM';
 const APP_URL = 'https://samn69.github.io/plant-care/';
 
 function localParts(date, tz) {
