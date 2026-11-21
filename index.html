@@ -1348,7 +1348,11 @@ async function testNotification() {
 }
 function saveNotifyTime(t) {
   if (!/^\d\d:\d\d$/.test(t)) return;
-  userRef().set({ notify: { time: t, tz: myTz() } }, { merge: true }).then(() => toast('Reminder time: ' + t)).catch(() => toast('No connection: try again when you are online.'));
+  const notify = { time: t, tz: myTz() };
+  // moved to later today and nothing was actually sent today: today's reminder can still come
+  const n = (remind.me && remind.me.notify) || {};
+  if (t > hm(now()) && n.sentOn !== isoDay(today())) notify.lastSent = '';
+  userRef().set({ notify }, { merge: true }).then(() => toast('Reminder time: ' + t)).catch(() => toast('No connection: try again when you are online.'));
 }
 function remindersCard() {
   let html = '<div class="card"><h2>Reminders</h2>';
