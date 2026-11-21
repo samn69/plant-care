@@ -981,7 +981,8 @@ function renderPhotoEditor() {
     '<div class="cropbox" id="cropBox"><img id="cropImg" src="' + ed.src + '" alt=""></div>' +
     '<p class="muted" style="text-align:center;margin-bottom:10px">Drag to move the plant into the circle. Pinch or use the slider to zoom.</p>' +
     '<div class="field"><label>Zoom</label><input id="cropZoom" type="range" min="100" max="400" value="100" style="width:100%"></div>' +
-    '<button class="btn primary wide" data-photosave>Save photo</button>';
+    '<div id="bgArea">' + bgAreaHtml() + '</div>' +
+    '<button class="btn primary wide" style="margin-top:10px" data-photosave>Save photo</button>';
   const box = document.getElementById('cropBox');
   box.addEventListener('pointerdown', e => { try { box.setPointerCapture(e.pointerId); } catch (x) {} ed.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
   box.addEventListener('pointermove', e => {
@@ -1004,12 +1005,47 @@ function croppedPhoto() {
   const k = edScale(); const side = CROP / k;
   const cx = ed.img.width / 2 - ed.x / k, cy = ed.img.height / 2 - ed.y / k;
   const c = document.createElement('canvas'); c.width = c.height = CROP_OUT;
-  const g = c.getContext('2d'); g.fillStyle = '#e7f2ea'; g.fillRect(0, 0, CROP_OUT, CROP_OUT);
+  const g = c.getContext('2d'); g.fillStyle = '#e7f2ec'; g.fillRect(0, 0, CROP_OUT, CROP_OUT);
   g.drawImage(ed.img, cx - side / 2, cy - side / 2, side, side, 0, 0, CROP_OUT, CROP_OUT);
   return c.toDataURL('image/jpeg', 0.82);
 }
+// Background removal runs on the phone (@imgly/background-removal, AGPL-3.0; this app's code is public).
+// The first time it downloads its model (about 40 MB); the browser keeps it for next time.
+const BG_LIB = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+function bgAreaHtml() {
+  if (ed.bgBusy) return '<div class="note season" style="text-align:center">✨ Removing the background… <span id="bgProgress">' + (ed.bgProgress || '') + '</span><br><span class="muted">The first time takes longer: it downloads about 40 MB.</span></div>';
+  if (ed.orig) return '<div class="row"><div class="grow muted">✨ Background removed. Leaves cut off?</div><button class="btn small" data-bgorig>Original</button></div>';
+  return '<button class="btn wide" data-bgremove>✨ Remove background</button>';
+}
+function renderBgArea() { const a = document.getElementById('bgArea'); if (a && ed) a.innerHTML = bgAreaHtml(); }
+async function removeBg() {
+  if (!ed || ed.bgBusy || ed.orig) return;
+  const mine = ed; mine.bgBusy = true; mine.bgProgress = ''; renderBgArea();
+  try {
+    const remove = window.__BGREMOVE || (await import(BG_LIB)).removeBackground;
+    const input = await (await fetch(mine.src)).blob();
+    const out = await remove(input, { model: 'isnet_quint8', output: { format: 'image/png' },
+      progress: (key, cur, total) => {
+        if (!/fetch/.test(key) || !total) return;
+        mine.bgProgress = Math.round(cur / total * 100) + '%'; const el = document.getElementById('bgProgress'); if (el && ed === mine) el.textContent = mine.bgProgress;
+      } });
+    const src = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(out); });
+    const img = await loadImage(src);
+    if (ed !== mine) return; // closed meanwhile
+    mine.orig = { img: mine.img, src: mine.src }; mine.img = img; mine.src = src;
+    document.getElementById('cropImg').src = src;
+  } catch (e) {
+    if (ed === mine) toast('The background could not be removed. Check the connection and try again.');
+  } finally { mine.bgBusy = false; if (ed === mine) { renderBgArea(); edPlace(); } }
+}
+function restoreBg() {
+  if (!ed || !ed.orig) return;
+  ed.img = ed.orig.img; ed.src = ed.orig.src; ed.orig = null;
+  document.getElementById('cropImg').src = ed.src; renderBgArea(); edPlace();
+}
 function savePhotoEdit() {
-  if (!ed) return; const url = croppedPhoto(); const target = ed.target; ed = null;
+  if (!ed) return;
+  if (ed.bgBusy) { toast('One moment: still removing the background.'); return; } const url = croppedPhoto(); const target = ed.target; ed = null;
   document.getElementById('photoPage').classList.remove('open');
   if (target === 'draft') { draft.photo = url; renderAdd(''); }
   else { const p = findPlant(target); if (!p) return; const old = p.photo; p.photo = url; if (!save()) p.photo = old; renderPlantPage(); }
@@ -1723,7 +1759,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar],[data-identify],[data-identpick],[data-identclear],[data-pickgen],[data-caretype],[data-holsave],[data-holclear],[data-holedit],[data-photoedit],[data-photosave]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar],[data-identify],[data-identpick],[data-identclear],[data-pickgen],[data-caretype],[data-holsave],[data-holclear],[data-holedit],[data-photoedit],[data-photosave],[data-bgremove],[data-bgorig]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -1739,6 +1775,8 @@ document.addEventListener('click', e => {
   if ('addsave' in d) return saveDraft();
   if ('addback' in d) { draft = null; return renderAdd(''); }
   if ('photosave' in d) return savePhotoEdit();
+  if ('bgremove' in d) return removeBg();
+  if ('bgorig' in d) return restoreBg();
   if (d.photoedit) { if (d.photoedit === 'draft') readDraftFields(); const src = d.photoedit === 'draft' ? draft.photo : findPlant(d.photoedit).photo; if (src) openPhotoEditor(src, d.photoedit).catch(() => toast('That photo could not be read.')); return; }
   if (d.photo) { readDraftFields(); photoTarget = d.photo; photoInput.click(); return; }
   if (t.hasAttribute('data-identify')) { identPhoto(); return; }
