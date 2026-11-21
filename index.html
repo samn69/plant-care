@@ -55,7 +55,7 @@
     .btn.danger { color: var(--red); }
     .btn.wide { width: 100%; padding: 12px; }
     .linkbtn { border: none; background: none; color: var(--green); font-weight: 600; padding: 4px 0; }
-    .thumb { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; background: var(--green-soft); display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+    .thumb { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; background: var(--green-soft); display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
     .item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
     .item:first-of-type { border-top: none; }
     .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -98,11 +98,18 @@
     .hdrbtn { border: none; background: var(--green); color: #fff; font-weight: 600; font-size: 15px; border-radius: 999px; padding: 6px 16px; }
     .back { border: none; background: none; color: var(--green); font-weight: 600; font-size: 16px; padding: 6px 4px; }
     #compassPage { z-index: 120; }
-    .hero { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 14px; margin-bottom: 12px; background: var(--green-soft); display: flex; align-items: center; justify-content: center; font-size: 70px; }
+    .hero { width: 200px; height: 200px; object-fit: cover; border-radius: 50%; margin: 4px auto 14px; box-shadow: 0 0 0 4px var(--card), 0 0 0 7px var(--green-soft); background: var(--green-soft); display: flex; align-items: center; justify-content: center; font-size: 70px; }
     .species-list .item { cursor: pointer; }
     .dial { width: 220px; height: 220px; border-radius: 50%; border: 3px solid var(--border); margin: 18px auto; position: relative; background: var(--card); }
     .dial .needle { position: absolute; left: 50%; top: 14px; width: 4px; height: 96px; margin-left: -2px; background: var(--green); border-radius: 2px; transform-origin: 50% 96px; }
     .dial .letter { position: absolute; font-weight: 700; color: var(--text2); font-size: 14px; }
+    .cropbox { width: 280px; height: 280px; border-radius: 50%; overflow: hidden; position: relative; margin: 10px auto 16px; background: var(--green-soft); touch-action: none; cursor: grab; box-shadow: 0 0 0 4px var(--card), 0 0 0 7px var(--green-soft); }
+    .cropbox img { position: absolute; max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+    #photoPage { z-index: 120; }
+    .steady { text-align: center; font-weight: 600; margin-top: 4px; min-height: 22px; }
+    .steady.ok { color: var(--green); }
+    .compass-done { text-align: center; padding: 40px 10px; }
+    .compass-done .big { font-size: 64px; }
     .heading-big { text-align: center; font-size: 40px; font-weight: 300; }
     .dirgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
     .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + var(--safe-b)); background: #222; color: #fff; border-radius: 12px; padding: 10px 14px; display: none; align-items: center; gap: 14px; z-index: 200; font-size: 14px; max-width: 92%; }
@@ -153,6 +160,11 @@
   <div class="page" id="compassPage">
     <div class="pagehead"><button class="back" data-close="compassPage">‹ Back</button><h1>Window direction</h1></div>
     <div class="pagebody" id="compassBody"></div>
+  </div>
+
+  <div class="page" id="photoPage">
+    <div class="pagehead"><button class="back" data-close="photoPage">‹ Back</button><h1>Photo</h1><button class="hdrbtn" data-photosave>Save</button></div>
+    <div class="pagebody" id="photoBody"></div>
   </div>
 
   <div class="page" id="locPage">
@@ -713,6 +725,7 @@ function openPage(id) {
 function closePage(id) {
   document.getElementById(id).classList.remove('open');
   if (id === 'compassPage') stopCompass();
+  if (id === 'photoPage') ed = null;
   if (id === 'plantPage') {
     // Back keeps typed changes to the name and room instead of dropping them
     if (openPlantId && applyDetails()) { save(); toast('Changes saved'); }
@@ -747,7 +760,7 @@ function renderPlantPage() {
   const typed = oldNick && oldNick.dataset.pid === p.id ? { nick: oldNick.value, room: oldRoom.value } : { nick: p.nick || '', room: p.room || '' };
   document.getElementById('plantPageTitle').textContent = plantName(p);
   let html = '<div data-photo="' + p.id + '">' + (p.photo ? '<img class="hero" src="' + p.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
-  html += '<div class="row" style="margin:-4px 2px 12px"><div class="grow"><div style="font-size:20px;font-weight:700">' + esc(plantName(p)) + '</div><div class="muted"><i>' + esc(s.latin) + '</i>' + (p.room ? ' · ' + esc(p.room) : '') + '</div></div><button class="btn small" data-photo="' + p.id + '">' + (p.photo ? 'Change photo' : 'Add photo') + '</button></div>';
+  html += '<div class="row" style="margin:-4px 2px 12px"><div class="grow"><div style="font-size:20px;font-weight:700">' + esc(plantName(p)) + '</div><div class="muted"><i>' + esc(s.latin) + '</i>' + (p.room ? ' · ' + esc(p.room) : '') + '</div></div>' + (p.photo ? '<button class="btn small" data-photoedit="' + p.id + '">Adjust</button>&nbsp;' : '') + '<button class="btn small" data-photo="' + p.id + '">' + (p.photo ? 'Change photo' : 'Add photo') + '</button></div>';
   if (s.toxic) html += '<div class="note warn">⚠️ Toxic to cats and dogs if chewed.</div>';
   if (s.generic) html += '<div class="card"><h2>' + s.emoji + ' Basic routine</h2><div class="muted" style="margin-bottom:8px">This plant is not in the care guide, so it follows a general routine. Pick the one that fits it best; the app also learns from when you water.' + (s.toxic === null ? ' It is not known here whether it is toxic to pets.' : '') + '</div>' +
     '<div class="seg">' + GENERIC.map(k => '<button data-caretype="' + k + '" data-id="' + p.id + '" class="' + (k === p.sp ? 'on' : '') + '">' + esc(LIB[k].name) + '</button>').join('') + '</div></div>';
@@ -834,7 +847,7 @@ function renderAdd(q) {
   let html = s.generic ? '<div class="note" style="margin-bottom:12px">' + s.emoji + ' Not in the care guide: it gets the <b>' + esc(LIB[draft.sp].name.toLowerCase()) + '</b> routine' + (s.routine ? '' : ' under that name') + '. You can change the routine on its page later.</div>' : '';
   if (s.generic && !draft.common) html += '<div class="field"><label>What is it called?</label><input id="adCommon" value="' + esc(draft.typedCommon || '') + '" placeholder="e.g. Boston fern"></div>';
   html += '<div data-photo="draft">' + (draft.photo ? '<img class="hero" src="' + draft.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
-  html += '<button class="btn wide" data-photo="draft" style="margin-bottom:14px">📷 ' + (draft.photo ? 'Change photo' : 'Take or choose a photo') + '</button>';
+  html += '<div class="row" style="margin-bottom:14px">' + (draft.photo ? '<button class="btn grow" data-photoedit="draft">Adjust</button>' : '') + '<button class="btn grow" data-photo="draft">📷 ' + (draft.photo ? 'Change photo' : 'Take or choose a photo') + '</button></div>';
   html += '<div class="field"><label>Name (optional, e.g. “Big Monstera”)</label><input id="adNick" value="' + esc(draft.nick) + '" placeholder="' + esc(s.name) + '"></div>';
   html += '<div class="field"><label>Room</label><input id="adRoom" list="roomList" value="' + esc(draft.room) + '" placeholder="e.g. Living room"></div>' + roomList();
   html += '<div class="field"><label>When was it last watered?</label><select id="adLast">' +
@@ -934,11 +947,74 @@ photoInput.onchange = async () => {
   if (!file || !photoTarget) return;
   try {
     if (photoTarget === 'identify') return identify(file);
-    const url = await shrinkPhoto(file, 720, 0.72);
-    if (photoTarget === 'draft') { readDraftFields(); draft.photo = url; renderAdd(''); }
-    else { const p = findPlant(photoTarget); const old = p.photo; p.photo = url; if (!save()) p.photo = old; renderPlantPage(); }
+    if (photoTarget === 'draft') readDraftFields();
+    await openPhotoEditor(await shrinkPhoto(file, 1280, 0.85), photoTarget);
   } catch (e) { toast('That photo could not be read. Try another one.'); }
 };
+// Round photo: drag to move, pinch or slide to zoom; saved as a 480 px square (shown as a circle).
+const CROP = 280, CROP_OUT = 480;
+let ed = null;
+function loadImage(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+async function openPhotoEditor(src, target) {
+  const img = await loadImage(src);
+  ed = { img, src, target, zoom: 1, x: 0, y: 0, pointers: new Map() };
+  renderPhotoEditor(); openPage('photoPage');
+}
+function edScale() { return CROP / Math.min(ed.img.width, ed.img.height) * ed.zoom; }
+function edClamp() {
+  const k = edScale(); const mx = (ed.img.width * k - CROP) / 2, my = (ed.img.height * k - CROP) / 2;
+  ed.x = Math.max(-mx, Math.min(mx, ed.x)); ed.y = Math.max(-my, Math.min(my, ed.y));
+}
+function edPlace() {
+  edClamp(); const k = edScale(); const im = document.getElementById('cropImg'); if (!im) return;
+  const w = ed.img.width * k, h = ed.img.height * k;
+  im.style.width = w + 'px'; im.style.height = h + 'px';
+  im.style.left = (CROP / 2 + ed.x - w / 2) + 'px'; im.style.top = (CROP / 2 + ed.y - h / 2) + 'px';
+  const z = document.getElementById('cropZoom'); if (z) z.value = Math.round(ed.zoom * 100);
+}
+function edZoom(z) {
+  // zoom around the middle of the circle
+  const nz = Math.max(1, Math.min(4, z)); const f = nz / ed.zoom; ed.x *= f; ed.y *= f; ed.zoom = nz;
+}
+function renderPhotoEditor() {
+  document.getElementById('photoBody').innerHTML =
+    '<div class="cropbox" id="cropBox"><img id="cropImg" src="' + ed.src + '" alt=""></div>' +
+    '<p class="muted" style="text-align:center;margin-bottom:10px">Drag to move the plant into the circle. Pinch or use the slider to zoom.</p>' +
+    '<div class="field"><label>Zoom</label><input id="cropZoom" type="range" min="100" max="400" value="100" style="width:100%"></div>' +
+    '<button class="btn primary wide" data-photosave>Save photo</button>';
+  const box = document.getElementById('cropBox');
+  box.addEventListener('pointerdown', e => { try { box.setPointerCapture(e.pointerId); } catch (x) {} ed.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
+  box.addEventListener('pointermove', e => {
+    const prev = ed.pointers.get(e.pointerId); if (!prev) return;
+    const others = [...ed.pointers.entries()].filter(([id]) => id !== e.pointerId).map(([, v]) => v);
+    if (!others.length) { ed.x += e.clientX - prev.x; ed.y += e.clientY - prev.y; }
+    else {
+      const o = others[0];
+      const before = Math.hypot(prev.x - o.x, prev.y - o.y), after = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+      if (before > 0) edZoom(ed.zoom * after / before);
+    }
+    ed.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); edPlace();
+  });
+  const up = e => ed.pointers.delete(e.pointerId);
+  box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+  document.getElementById('cropZoom').addEventListener('input', e => { edZoom(e.target.value / 100); edPlace(); });
+  edPlace();
+}
+function croppedPhoto() {
+  const k = edScale(); const side = CROP / k;
+  const cx = ed.img.width / 2 - ed.x / k, cy = ed.img.height / 2 - ed.y / k;
+  const c = document.createElement('canvas'); c.width = c.height = CROP_OUT;
+  const g = c.getContext('2d'); g.fillStyle = '#e7f2ea'; g.fillRect(0, 0, CROP_OUT, CROP_OUT);
+  g.drawImage(ed.img, cx - side / 2, cy - side / 2, side, side, 0, 0, CROP_OUT, CROP_OUT);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+function savePhotoEdit() {
+  if (!ed) return; const url = croppedPhoto(); const target = ed.target; ed = null;
+  document.getElementById('photoPage').classList.remove('open');
+  if (target === 'draft') { draft.photo = url; renderAdd(''); }
+  else { const p = findPlant(target); if (!p) return; const old = p.photo; p.photo = url; if (!save()) p.photo = old; renderPlantPage(); }
+  toast('Photo saved');
+}
 function shrinkPhoto(file, max, quality) {
   return new Promise((resolve, reject) => {
     const img = new Image(); const url = URL.createObjectURL(file);
@@ -954,9 +1030,9 @@ function shrinkPhoto(file, max, quality) {
 }
 
 // ---------- Compass ----------
-let compassTarget = null, heading = null, compassOn = false, compassTimer = null;
+let compassTarget = null, heading = null, compassOn = false, compassTimer = null, recent = [], compassClose = null;
 function openCompass(target) {
-  compassTarget = target; heading = null;
+  compassTarget = target; heading = null; recent = []; clearTimeout(compassClose);
   renderCompass('start'); openPage('compassPage');
 }
 function renderCompass(state, msg) {
@@ -970,8 +1046,12 @@ function renderCompass(state, msg) {
     html += '<div class="dial"><span class="letter" style="left:50%;top:6px;margin-left:-5px">N</span><span class="letter" style="right:8px;top:50%;margin-top:-9px">E</span><span class="letter" style="left:50%;bottom:6px;margin-left:-4px">S</span><span class="letter" style="left:8px;top:50%;margin-top:-9px">W</span>' +
       '<div class="needle" id="needle" style="transform:rotate(' + (h || 0) + 'deg)"></div></div>';
     html += '<div class="heading-big" id="headingText">' + (h == null ? 'Waiting for the compass…' : h + '° ' + dirOf(h)) + '</div>';
-    html += '<p class="muted" style="text-align:center;margin:6px 0 14px">Point the top of the phone at the window</p>';
+    html += '<div class="steady" id="steadyText">Hold the phone still…</div>';
+    html += '<p class="muted" style="text-align:center;margin:6px 0 14px">Point the top of the phone at the window. When it says <b>Steady</b>, tap Save.</p>';
     html += '<button class="btn primary wide" data-compass-save>Save this direction</button>';
+  } else if (state === 'done') {
+    body.innerHTML = '<div class="compass-done"><div class="big">✅</div><div style="font-size:22px;font-weight:700;margin-top:8px">Saved</div><div class="muted" style="margin-top:6px">' + esc(msg) + '</div></div>';
+    return;
   } else {
     html += '<div class="note warn">' + esc(msg) + '</div>';
   }
@@ -996,6 +1076,12 @@ function onOrientation(e) {
   else if (e.absolute && e.alpha != null) h = (360 - e.alpha) % 360;
   if (h == null) return;
   heading = h;
+  // steady when the reading has stayed within a few degrees for over a second
+  const now_ = Date.now(); recent.push([now_, h]); while (recent.length && now_ - recent[0][0] > 1500) recent.shift();
+  const spread = Math.max(...recent.map(r => Math.abs(((r[1] - h + 540) % 360) - 180)));
+  const steady = recent.length > 3 && now_ - recent[0][0] >= 1000 && spread <= 5;
+  const st = document.getElementById('steadyText');
+  if (st) { st.textContent = steady ? '✓ Steady: tap Save' : 'Hold the phone still…'; st.classList.toggle('ok', steady); }
   const n = document.getElementById('needle'); const t = document.getElementById('headingText');
   if (n) n.style.transform = 'rotate(' + Math.round(h) + 'deg)';
   if (t) t.textContent = Math.round(h) + '° ' + dirOf(h);
@@ -1006,10 +1092,17 @@ function stopCompass() {
   window.removeEventListener('deviceorientation', onOrientation, true);
 }
 function setDirection(deg) {
-  deg = Math.round(deg) % 360;
-  if (compassTarget === 'draft') { draft.dir = deg; stopCompass(); document.getElementById('compassPage').classList.remove('open'); renderAdd(''); }
-  else { const p = findPlant(compassTarget); p.dir = deg; save(); stopCompass(); document.getElementById('compassPage').classList.remove('open'); renderPlantPage(); }
-  toast('Window: ' + DIR_NAME[dirOf(deg)] + ' (' + deg + '°)');
+  deg = Math.round(deg) % 360; stopCompass();
+  if (compassTarget === 'draft') { draft.dir = deg; renderAdd(''); }
+  else { const p = findPlant(compassTarget); p.dir = deg; save(); renderPlantPage(); }
+  // a clear "done" screen for a moment, then back to the plant
+  const page = document.getElementById('compassPage');
+  if (page.classList.contains('open')) {
+    renderCompass('done', DIR_NAME[dirOf(deg)] + ' window (' + deg + '°)');
+    if (navigator.vibrate) navigator.vibrate(60);
+    clearTimeout(compassClose); compassClose = setTimeout(() => page.classList.remove('open'), 1500);
+  }
+  toast('Window saved: ' + DIR_NAME[dirOf(deg)] + ' (' + deg + '°)');
 }
 
 // ---------- Location ----------
@@ -1630,7 +1723,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar],[data-identify],[data-identpick],[data-identclear],[data-pickgen],[data-caretype],[data-holsave],[data-holclear],[data-holedit]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar],[data-identify],[data-identpick],[data-identclear],[data-pickgen],[data-caretype],[data-holsave],[data-holclear],[data-holedit],[data-photoedit],[data-photosave]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -1645,6 +1738,8 @@ document.addEventListener('click', e => {
   if (d.pick) { draft = { sp: d.pick, nick: '', room: rooms()[0] || '', photo: pendingPhoto, last: '7', dir: null, dist: 'near' }; pendingPhoto = null; renderAdd(''); document.getElementById('addPage').scrollTop = 0; return; }
   if ('addsave' in d) return saveDraft();
   if ('addback' in d) { draft = null; return renderAdd(''); }
+  if ('photosave' in d) return savePhotoEdit();
+  if (d.photoedit) { if (d.photoedit === 'draft') readDraftFields(); const src = d.photoedit === 'draft' ? draft.photo : findPlant(d.photoedit).photo; if (src) openPhotoEditor(src, d.photoedit).catch(() => toast('That photo could not be read.')); return; }
   if (d.photo) { readDraftFields(); photoTarget = d.photo; photoInput.click(); return; }
   if (t.hasAttribute('data-identify')) { identPhoto(); return; }
   if (d.identpick != null) { identPick(+d.identpick); return; }
