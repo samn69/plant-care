@@ -93,6 +93,7 @@
     .page .pagehead { position: sticky; top: 0; background: var(--bg); padding: calc(var(--safe-t) + 10px) 14px 8px; display: flex; align-items: center; gap: 8px; z-index: 2; }
     .page .pagehead h1 { font-size: 18px; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .page .pagebody { padding: 4px 14px calc(30px + var(--safe-b)); }
+    .hdrbtn { border: none; background: var(--green); color: #fff; font-weight: 600; font-size: 15px; border-radius: 999px; padding: 6px 16px; }
     .back { border: none; background: none; color: var(--green); font-weight: 600; font-size: 16px; padding: 6px 4px; }
     #compassPage { z-index: 120; }
     .hero { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 14px; margin-bottom: 12px; background: var(--green-soft); display: flex; align-items: center; justify-content: center; font-size: 70px; }
@@ -136,12 +137,12 @@
   </nav>
 
   <div class="page" id="plantPage">
-    <div class="pagehead"><button class="back" data-close="plantPage">‹ Back</button><h1 id="plantPageTitle"></h1></div>
+    <div class="pagehead"><button class="back" data-close="plantPage">‹ Back</button><h1 id="plantPageTitle"></h1><button class="hdrbtn" data-saveplant>Save</button></div>
     <div class="pagebody" id="plantPageBody"></div>
   </div>
 
   <div class="page" id="addPage">
-    <div class="pagehead"><button class="back" data-close="addPage">‹ Back</button><h1 id="addPageTitle">Add a plant</h1></div>
+    <div class="pagehead"><button class="back" data-close="addPage">‹ Back</button><h1 id="addPageTitle">Add a plant</h1><button class="hdrbtn hidden" id="addTop" data-addsave>Add</button></div>
     <div class="pagebody" id="addPageBody"></div>
   </div>
 
@@ -576,7 +577,11 @@ function openPage(id) {
 function closePage(id) {
   document.getElementById(id).classList.remove('open');
   if (id === 'compassPage') stopCompass();
-  if (id === 'plantPage') openPlantId = null;
+  if (id === 'plantPage') {
+    // Back keeps typed changes to the name and room instead of dropping them
+    if (openPlantId && applyDetails()) { save(); toast('Changes saved'); }
+    openPlantId = null;
+  }
   if (!document.querySelector('.page.open')) document.body.classList.remove('page-open');
   render();
 }
@@ -587,9 +592,23 @@ document.addEventListener('keydown', e => {
   if (open) closePage(open.id);
 });
 function openPlant(id) { openPlantId = id; renderPlantPage(); openPage('plantPage'); }
+// Copies the name / room fields into the plant; true when something changed.
+function applyDetails() {
+  const p = findPlant(openPlantId); const n = document.getElementById('ppNick'); const r = document.getElementById('ppRoom');
+  if (!p || !n || !r || n.dataset.pid !== p.id) return false;
+  const nick = n.value.trim(), room = r.value.trim();
+  if (nick === (p.nick || '') && room === (p.room || '')) return false;
+  p.nick = nick; p.room = room; return true;
+}
+function savePlantAndClose() {
+  if (applyDetails()) save();
+  openPlantId = null; closePage('plantPage'); toast('Saved');
+}
 function renderPlantPage() {
   const p = findPlant(openPlantId); if (!p) { closePage('plantPage'); return; }
   const s = sp(p); const w = waterStatus(p); const f = feedStatus(p); const season = w.season;
+  const oldNick = document.getElementById('ppNick'), oldRoom = document.getElementById('ppRoom');
+  const typed = oldNick && oldNick.dataset.pid === p.id ? { nick: oldNick.value, room: oldRoom.value } : { nick: p.nick || '', room: p.room || '' };
   document.getElementById('plantPageTitle').textContent = plantName(p);
   let html = '<div data-photo="' + p.id + '">' + (p.photo ? '<img class="hero" src="' + p.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
   html += '<div class="row" style="margin:-4px 2px 12px"><div class="grow"><div style="font-size:20px;font-weight:700">' + esc(plantName(p)) + '</div><div class="muted"><i>' + esc(s.latin) + '</i>' + (p.room ? ' · ' + esc(p.room) : '') + '</div></div><button class="btn small" data-photo="' + p.id + '">' + (p.photo ? 'Change photo' : 'Add photo') + '</button></div>';
@@ -635,9 +654,9 @@ function renderPlantPage() {
 
   // Details
   html += '<div class="card"><h2>Details</h2>' +
-    '<div class="field"><label>Name (optional)</label><input id="ppNick" value="' + esc(p.nick || '') + '" placeholder="' + esc(s.name) + '"></div>' +
-    '<div class="field"><label>Room</label><input id="ppRoom" list="roomList" value="' + esc(p.room || '') + '" placeholder="e.g. Living room"></div>' + roomList() +
-    '<button class="btn primary wide" data-savedetails="' + p.id + '">Save details</button>' +
+    '<div class="field"><label>Name (optional)</label><input id="ppNick" data-pid="' + p.id + '" value="' + esc(typed.nick) + '" placeholder="' + esc(s.name) + '"></div>' +
+    '<div class="field"><label>Room</label><input id="ppRoom" list="roomList" value="' + esc(typed.room) + '" placeholder="e.g. Living room"></div>' + roomList() +
+    '<button class="btn primary wide" data-saveplant>Save</button>' +
     '<button class="btn danger wide" style="margin-top:8px;background:none" data-delete="' + p.id + '">Delete plant</button></div>';
   if (p.factor && Math.abs(p.factor - 1) >= 0.04) html += '<div class="muted" style="text-align:center">Learned from you: waters ' + Math.round(Math.abs(p.factor - 1) * 100) + '% ' + (p.factor > 1 ? 'less' : 'more') + ' often than the standard. <button class="linkbtn" data-resetlearn="' + p.id + '">Reset</button></div>';
   document.getElementById('plantPageBody').innerHTML = html;
@@ -658,6 +677,7 @@ function matches(key, q) {
 function renderAdd(q) {
   const body = document.getElementById('addPageBody');
   document.getElementById('addPageTitle').textContent = draft ? 'Add ' + LIB[draft.sp].name : 'Add a plant';
+  document.getElementById('addTop').classList.toggle('hidden', !draft);
   if (!draft) {
     const list = Object.keys(LIB).filter(k => matches(k, q));
     let html = '<div class="field"><input id="spSearch" placeholder="Search: e.g. Monstera, snake plant…" value="' + esc(q) + '" autocomplete="off"></div><div class="card species-list" id="spList">';
@@ -816,7 +836,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-savedetails],[data-delete],[data-unlog],[data-resetlearn],[data-hemi],[data-export],[data-import]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-hemi],[data-export],[data-import]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -838,10 +858,7 @@ document.addEventListener('click', e => {
     else { readDraftFields(); draft.dist = d.dist; renderAdd(''); }
     return;
   }
-  if (d.savedetails) {
-    const p = findPlant(d.savedetails); p.nick = document.getElementById('ppNick').value.trim(); p.room = document.getElementById('ppRoom').value.trim();
-    save(); renderPlantPage(); toast('Saved'); return;
-  }
+  if ('saveplant' in d) return savePlantAndClose();
   if (d.delete) {
     if (t.dataset.armed) { const before = snapshot(); D.plants = D.plants.filter(p => p.id !== d.delete); save(); closePage('plantPage'); toast('Plant deleted', before); }
     else { t.dataset.armed = '1'; t.textContent = 'Tap again to delete'; setTimeout(() => { if (t.isConnected) { delete t.dataset.armed; t.textContent = 'Delete plant'; } }, 3000); }
