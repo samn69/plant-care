@@ -1,6 +1,6 @@
 // Keeps the app usable offline. The page is fetched fresh when online (falls back to the
 // saved copy after 3 s or with no signal).
-const CACHE = 'plant-care-v1';
+const CACHE = 'plant-care-v2';
 const FILES = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', event => {
