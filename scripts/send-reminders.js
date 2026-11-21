@@ -32,13 +32,15 @@ function message(groups) {
 
 async function run({ db, sendPush, now = new Date(), log = console.log, FieldValue }) {
   const users = await db.collection('users').get();
-  const stats = { users: users.size, due: 0, sent: 0, removed: 0, skipped: 0 };
+  const stats = { users: users.size, due: 0, sent: 0, removed: 0, skipped: 0, noPhone: 0, off: 0, early: 0, doneToday: 0 };
   for (const u of users.docs) {
     const d = u.data() || {}; const n = d.notify || {}; const subs = Array.isArray(d.subs) ? d.subs : [];
-    if (!subs.length || n.on === false) { stats.skipped++; continue; }
+    if (!subs.length) { stats.skipped++; stats.noPhone++; continue; }
+    if (n.on === false) { stats.skipped++; stats.off++; continue; }
     const tz = validTz(n.tz) ? n.tz : 'Europe/Berlin';
     const { date, time } = localParts(now, tz);
-    if (time < (n.time || '09:00') || n.lastSent === date) { stats.skipped++; continue; }
+    if (time < (n.time || '09:00')) { stats.skipped++; stats.early++; continue; }
+    if (n.lastSent === date) { stats.skipped++; stats.doneToday++; continue; }
     stats.due++;
     const homes = await db.collection('homes').where('members', 'array-contains', u.id).get();
     const groups = [];
@@ -54,7 +56,7 @@ async function run({ db, sendPush, now = new Date(), log = console.log, FieldVal
       groups.push(g);
     }
     const msg = message(groups);
-    const gone = [];
+    const gone = []; const sentBefore = stats.sent;
     if (msg) {
       for (const s of subs) {
         try { await sendPush(s, JSON.stringify(msg)); stats.sent++; }
@@ -65,6 +67,7 @@ async function run({ db, sendPush, now = new Date(), log = console.log, FieldVal
       }
     }
     const upd = { 'notify.lastSent': date };
+    if (stats.sent > sentBefore) upd['notify.sentOn'] = date; // a reminder really arrived today
     if (gone.length) { upd.subs = FieldValue.arrayRemove(...gone); stats.removed += gone.length; }
     await u.ref.update(upd);
   }
