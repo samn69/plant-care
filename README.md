@@ -10,5 +10,7 @@ routine that changes with the seasons. Open it in Safari and choose
 - **Indoor climate**: type in your thermometer's temperature and humidity; dry or cold air changes the advice.
 - **Learns**: "Still wet" or watering early adjusts that plant's schedule.
 
-Data stays on the phone for now (backup file in Settings). Planned: location and weather (#2),
+- **Location & weather**: your city from the phone (or typed in) sets the seasons; the local forecast warns about frost, hot days and grey spells.
+
+Data stays on the phone for now (backup file in Settings). Planned:
 sign-in and shared homes (#3), notifications and calendar (#4), identify a plant from a photo (#5).
