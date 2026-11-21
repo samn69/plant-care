@@ -997,6 +997,11 @@ const FIREBASE_CONFIG = {
   appId: '1:483347582259:web:754965eaf1624294df4246'
 };
 const FB_VERSION = '10.14.1';
+// Google sign-in goes through Google's own library (a window that also works from the iPhone home screen,
+// unlike Firebase's own sign-in window), then the result is handed to Firebase.
+// Firebase console → Authentication → Sign-in method → Google → Web SDK configuration → Web client ID.
+const GOOGLE_CLIENT_ID = null;
+let gisClient = null;
 const cloud = { user: null, authKnown: false, failed: false, homes: [], homesLoaded: false, invites: [], home: null, homeId: null, loading: false, synced: {}, climateJson: 'null', unsub: [], watch: [], db: null, auth: null, creating: false };
 function cloudActive() { return !!(cloud.user && cloud.homeId); }
 // A home chosen on this phone whose plants are not shown yet (still signing in or loading).
@@ -1024,7 +1029,25 @@ function authError(e) {
   if (e.code === 'auth/network-request-failed') return 'No connection: try again when you are online.';
   return 'Sign-in failed: ' + (e.message || e.code);
 }
+// Loads Google's library ahead of the tap: the sign-in window must open straight from the tap itself.
+async function prepareGoogle() {
+  if (!GOOGLE_CLIENT_ID || gisClient) return;
+  try { if (!(window.google && google.accounts && google.accounts.oauth2)) await loadScript('https://accounts.google.com/gsi/client'); } catch (e) { return; }
+  gisClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID, scope: 'openid email profile',
+    callback: async r => {
+      if (!r || r.error || !r.access_token) { if (r && r.error && r.error !== 'access_denied') toast('Sign-in failed: ' + (r.error_description || r.error)); return; }
+      try { await cloud.auth.signInWithCredential(firebase.auth.GoogleAuthProvider.credential(null, r.access_token)); }
+      catch (e) { toast(authError(e)); }
+    },
+    error_callback: e => { if (e && e.type !== 'popup_closed') toast('The sign-in window could not open (' + e.type + '). Try again.'); }
+  });
+}
 async function signIn() {
+  if (GOOGLE_CLIENT_ID) {
+    if (gisClient) { gisClient.requestAccessToken({ prompt: 'select_account' }); return; }
+    await prepareGoogle(); toast(gisClient ? 'Ready: tap Sign in with Google again' : 'No connection: try again when you are online.'); return;
+  }
   const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
   try { await cloud.auth.signInWithPopup(p); }
   catch (e) {
@@ -1036,7 +1059,7 @@ async function signOut() { leaveCloudMode(); await cloud.auth.signOut(); toast('
 function stop(list) { while (list.length) { try { list.pop()(); } catch (e) {} } }
 function onUser(u) {
   cloud.authKnown = true; cloud.user = u; stop(cloud.watch); cloud.homes = []; cloud.invites = []; cloud.homesLoaded = false;
-  if (!u) { if (cloud.homeId) leaveCloudMode(); render(); return; }
+  if (!u) { if (cloud.homeId) leaveCloudMode(); render(); prepareGoogle(); return; }
   // the home shown on this phone belongs to whoever chose it; someone else signing in starts with their own list
   if (D.settings.home && D.settings.homeUser && D.settings.homeUser !== u.uid) { D.settings.home = null; persistSettings(); }
   if (D.settings.home && !cloud.homeId) enterHome(D.settings.home);
