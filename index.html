@@ -264,8 +264,38 @@ const LIB = {
       spring: 'Start watering again slowly.',
       summer: 'As much sun as possible.',
       autumn: 'Water less and less, getting it ready for its winter rest.' },
-    note: 'The brightest window you have, south is best. No misting.' }
+    note: 'The brightest window you have, south is best. No misting.' },
+  // Basic routines for plants that are not in the guide (identified from a photo or added by name).
+  // The plant keeps its own name; the routine can be changed on its page and adapts to your watering.
+  leafy: { generic: true, name: 'Leafy houseplant', latin: 'Basic routine for leafy plants', aka: [], emoji: '🌿',
+    water: { winter: 14, spring: 9, summer: 7, autumn: 11 }, feed: { winter: 0, spring: 28, summer: 21, autumn: 0 },
+    light: 'bright-soft', hum: 45, mist: false, tmin: 12, temp: '16–26 °C', toxic: null,
+    check: 'the top 2–3 cm of soil is dry',
+    tips: { winter: 'Less light and growth in winter: water less, and keep it away from radiators and cold glass.',
+      spring: 'New growth starts: water a bit more often and start feeding. Repot if roots come out of the pot.',
+      summer: 'Bright light without hot midday sun behind glass. Check the soil more often in warm weeks.',
+      autumn: 'Stop feeding and water less as the days get shorter.' },
+    note: 'A general routine for leafy houseplants. Always feel the soil first: the app learns from when you actually water.' },
+  succulent: { generic: true, name: 'Succulent', latin: 'Basic routine for succulents', aka: [], emoji: '🪴',
+    water: { winter: 30, spring: 14, summer: 10, autumn: 21 }, feed: { winter: 0, spring: 42, summer: 28, autumn: 0 },
+    light: 'sun', hum: 0, mist: false, tmin: 8, temp: '10–30 °C', toxic: null,
+    check: 'the soil is completely dry; water thoroughly, then empty the saucer',
+    tips: { winter: 'Rest time: water very little, keep it bright and rather cool.',
+      spring: 'Start watering more again, slowly.',
+      summer: 'As much light as possible; water when the soil is dry all the way down.',
+      autumn: 'Water less and less before its winter rest.' },
+    note: 'A general routine for succulents. Too much water is the usual problem: when in doubt, wait.' },
+  humid: { generic: true, name: 'Humidity lover', latin: 'Basic routine for ferns and other humidity lovers', aka: [], emoji: '🌱',
+    water: { winter: 9, spring: 6, summer: 4, autumn: 7 }, feed: { winter: 0, spring: 28, summer: 21, autumn: 0 },
+    light: 'medium', hum: 60, mist: true, tmin: 15, temp: '18–25 °C', toxic: null,
+    check: 'the top 1–2 cm of soil is dry; keep it lightly moist, never soggy',
+    tips: { winter: 'Heated air is its biggest problem: mist in the morning or put it on a tray of wet pebbles.',
+      spring: 'Start feeding again at half strength.',
+      summer: 'Out of direct sun; it may need water twice a week in warm weeks.',
+      autumn: 'Water a little less, but do not let it dry out.' },
+    note: 'A general routine for ferns and other plants that like humid air and evenly moist soil.' }
 };
+const GENERIC = ['leafy', 'succulent', 'humid'];
 const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
 const SEASON_ICON = { winter: '❄️', spring: '🌱', summer: '☀️', autumn: '🍂' };
 const SEASON_NOTE = {
@@ -327,7 +357,10 @@ function seasonStarts(d) {
 }
 
 // ---------- Care maths ----------
-function sp(p) { return LIB[p.sp]; }
+function sp(p) {
+  const s = LIB[p.sp];
+  return s.generic && (p.common || p.latin) ? Object.assign({}, s, { name: p.common || p.latin, latin: p.latin || s.latin, routine: s.name }) : s;
+}
 function dirOf(deg) { return DIRS[Math.round(((deg % 360) + 360) % 360 / 45) % 8]; }
 function lightScore(p) {
   if (p.dir == null) return null;
@@ -644,6 +677,8 @@ function renderPlantPage() {
   let html = '<div data-photo="' + p.id + '">' + (p.photo ? '<img class="hero" src="' + p.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
   html += '<div class="row" style="margin:-4px 2px 12px"><div class="grow"><div style="font-size:20px;font-weight:700">' + esc(plantName(p)) + '</div><div class="muted"><i>' + esc(s.latin) + '</i>' + (p.room ? ' · ' + esc(p.room) : '') + '</div></div><button class="btn small" data-photo="' + p.id + '">' + (p.photo ? 'Change photo' : 'Add photo') + '</button></div>';
   if (s.toxic) html += '<div class="note warn">⚠️ Toxic to cats and dogs if chewed.</div>';
+  if (s.generic) html += '<div class="card"><h2>' + s.emoji + ' Basic routine</h2><div class="muted" style="margin-bottom:8px">This plant is not in the care guide, so it follows a general routine. Pick the one that fits it best; the app also learns from when you water.' + (s.toxic === null ? ' It is not known here whether it is toxic to pets.' : '') + '</div>' +
+    '<div class="seg">' + GENERIC.map(k => '<button data-caretype="' + k + '" data-id="' + p.id + '" class="' + (k === p.sp ? 'on' : '') + '">' + esc(LIB[k].name) + '</button>').join('') + '</div></div>';
 
   // This season
   html += '<div class="card"><h2>' + SEASON_ICON[season] + ' ' + cap(season) + ' care</h2>';
@@ -700,27 +735,33 @@ function roomList() { return '<datalist id="roomList">' + rooms().map(r => '<opt
 
 // ---------- Add a plant ----------
 let draft = null;
-function openAdd() { draft = null; renderAdd(''); openPage('addPage'); }
+function openAdd() { draft = null; ident = null; renderAdd(''); openPage('addPage'); }
 function matches(key, q) {
   const s = LIB[key]; q = q.trim().toLowerCase(); if (!q) return true;
   return [s.name, s.latin, ...s.aka].some(x => x.toLowerCase().includes(q));
 }
 function renderAdd(q) {
   const body = document.getElementById('addPageBody');
-  document.getElementById('addPageTitle').textContent = draft ? 'Add ' + LIB[draft.sp].name : 'Add a plant';
+  document.getElementById('addPageTitle').textContent = draft ? 'Add ' + sp(draft).name : 'Add a plant';
   document.getElementById('addTop').classList.toggle('hidden', !draft);
   if (!draft) {
-    const list = Object.keys(LIB).filter(k => matches(k, q));
-    let html = '<div class="field"><input id="spSearch" placeholder="Search: e.g. Monstera, snake plant…" value="' + esc(q) + '" autocomplete="off"></div><div class="card species-list" id="spList">';
+    if (ident) { body.innerHTML = identHtml(); return; }
+    const list = Object.keys(LIB).filter(k => !LIB[k].generic && matches(k, q));
+    let html = PLANTNET_KEY ? '<button class="btn primary wide" data-identify style="margin-bottom:12px">📷 Identify from a photo</button>' : '';
+    html += '<div class="field"><input id="spSearch" placeholder="Search: e.g. Monstera, snake plant…" value="' + esc(q) + '" autocomplete="off"></div><div class="card species-list" id="spList">';
     html += list.map(k => '<div class="item" data-pick="' + k + '"><div class="thumb">' + LIB[k].emoji + '</div><div class="grow"><div class="name">' + esc(LIB[k].name) + '</div><div class="muted"><i>' + esc(LIB[k].latin) + '</i></div></div><span class="muted">›</span></div>').join('');
-    if (!list.length) html += '<div class="muted">No plant matches “' + esc(q) + '”. More plants and identifying a plant from a photo are coming.</div>';
+    if (!list.length) html += '<div class="muted">“' + esc(q) + '” is not in the care guide' + (PLANTNET_KEY ? ': identify it from a photo, or add it below with a basic routine.' : ': add it below with a basic routine.') + '</div>';
+    html += '</div><div class="card species-list"><h2>Not in the list?</h2><div class="muted" style="margin-bottom:6px">Add ' + (q.trim() ? '“' + esc(q.trim()) + '”' : 'it') + ' with a basic routine:</div>' +
+      GENERIC.map(k => '<div class="item" data-pickgen="' + k + '"><div class="thumb">' + LIB[k].emoji + '</div><div class="grow"><div class="name">' + esc(LIB[k].name) + '</div><div class="muted">' + esc(LIB[k].water.summer + '–' + LIB[k].water.winter + ' days between watering') + '</div></div><span class="muted">›</span></div>').join('');
     body.innerHTML = html + '</div>';
     const inp = document.getElementById('spSearch');
     inp.oninput = () => { const v = inp.value; const pos = inp.selectionStart; renderAdd(v); const n = document.getElementById('spSearch'); n.focus(); n.setSelectionRange(pos, pos); };
     return;
   }
-  const s = LIB[draft.sp];
-  let html = '<div data-photo="draft">' + (draft.photo ? '<img class="hero" src="' + draft.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
+  const s = sp(draft);
+  let html = s.generic ? '<div class="note" style="margin-bottom:12px">' + s.emoji + ' Not in the care guide: it gets the <b>' + esc(LIB[draft.sp].name.toLowerCase()) + '</b> routine' + (s.routine ? '' : ' under that name') + '. You can change the routine on its page later.</div>' : '';
+  if (s.generic && !draft.common) html += '<div class="field"><label>What is it called?</label><input id="adCommon" value="' + esc(draft.typedCommon || '') + '" placeholder="e.g. Boston fern"></div>';
+  html += '<div data-photo="draft">' + (draft.photo ? '<img class="hero" src="' + draft.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
   html += '<button class="btn wide" data-photo="draft" style="margin-bottom:14px">📷 ' + (draft.photo ? 'Change photo' : 'Take or choose a photo') + '</button>';
   html += '<div class="field"><label>Name (optional, e.g. “Big Monstera”)</label><input id="adNick" value="' + esc(draft.nick) + '" placeholder="' + esc(s.name) + '"></div>';
   html += '<div class="field"><label>Room</label><input id="adRoom" list="roomList" value="' + esc(draft.room) + '" placeholder="e.g. Living room"></div>' + roomList();
@@ -734,17 +775,83 @@ function renderAdd(q) {
 function readDraftFields() {
   if (!draft) return;
   const n = document.getElementById('adNick'); if (n) draft.nick = n.value.trim();
+  const c = document.getElementById('adCommon'); if (c && c.value.trim()) draft.typedCommon = c.value.trim();
   const r = document.getElementById('adRoom'); if (r) draft.room = r.value.trim();
   const l = document.getElementById('adLast'); if (l) draft.last = l.value;
 }
 function saveDraft() {
   readDraftFields();
-  const p = { id: uid(), sp: draft.sp, nick: draft.nick, room: draft.room, photo: draft.photo || null, dir: draft.dir, dist: draft.dist, factor: 1, added: now().toISOString(), log: [], snooze: null };
+  const common = draft.common || draft.typedCommon || '';
+  const p = { id: uid(), sp: draft.sp, ...(common ? { common } : {}), ...(draft.latin ? { latin: draft.latin } : {}), nick: draft.nick, room: draft.room, photo: draft.photo || null, dir: draft.dir, dist: draft.dist, factor: 1, added: now().toISOString(), log: [], snooze: null };
   if (draft.last !== '') p.log.push({ t: 'water', at: addDays(today(), -parseInt(draft.last, 10)).toISOString() });
   D.plants.push(p);
   if (!save()) { D.plants.pop(); return; }
   closePage('addPage'); tab = 'plants'; render();
   toast(plantName(p) + ' added');
+}
+
+// ---------- Identify from a photo (Pl@ntNet, free: 500 a day) ----------
+const PLANTNET_KEY = '2b10mFhAGsmH7tyuZArgyyDl3u';
+let ident = null, pendingPhoto = null; // photo kept after "search by name instead" // { state: 'busy' | 'results' | 'error', photo, results, msg }
+// Pl@ntNet names → care guide. Exact species first, then genus, then family.
+const PN_SPECIES = { 'Ficus elastica': 'ficus', 'Dracaena fragrans': 'dracaena', 'Dracaena trifasciata': 'sansevieria', 'Sansevieria trifasciata': 'sansevieria',
+  'Goeppertia ornata': 'calathea', 'Calathea ornata': 'calathea', 'Epipremnum aureum': 'pothos', 'Zamioculcas zamiifolia': 'zz', 'Monstera deliciosa': 'monstera', 'Pilea peperomioides': 'pilea' };
+const PN_GENUS = { Alocasia: 'alocasia', Epipremnum: 'pothos', Zamioculcas: 'zz', Monstera: 'monstera', Goeppertia: 'calathea', Calathea: 'calathea', Sansevieria: 'sansevieria' };
+const PN_FAMILY = { Cactaceae: 'cactus' };
+const SUCCULENT_FAMILIES = ['Crassulaceae', 'Aizoaceae', 'Asphodelaceae', 'Portulacaceae', 'Didiereaceae'];
+const HUMID_FAMILIES = ['Marantaceae', 'Polypodiaceae', 'Nephrolepidaceae', 'Pteridaceae', 'Aspleniaceae', 'Davalliaceae', 'Dryopteridaceae', 'Bromeliaceae', 'Gesneriaceae', 'Selaginellaceae'];
+function careFor(r) {
+  const sci = r.latin, genus = r.genus, fam = r.family;
+  if (PN_SPECIES[sci]) return { sp: PN_SPECIES[sci], how: 'guide' };
+  if (PN_GENUS[genus]) return { sp: PN_GENUS[genus], how: 'relative' };
+  if (PN_FAMILY[fam]) return { sp: PN_FAMILY[fam], how: 'relative' };
+  return { sp: SUCCULENT_FAMILIES.includes(fam) ? 'succulent' : HUMID_FAMILIES.includes(fam) ? 'humid' : 'leafy', how: 'basic' };
+}
+function identPhoto() { readDraftFields(); photoTarget = 'identify'; photoInput.click(); }
+async function identify(file) {
+  ident = { state: 'busy', photo: null }; renderAdd('');
+  try {
+    ident.photo = await shrinkPhoto(file, 720, 0.72); renderAdd('');
+    const big = await shrinkPhoto(file, 1280, 0.85);
+    const form = new FormData();
+    form.append('images', await (await fetch(big)).blob(), 'plant.jpg'); form.append('organs', 'auto');
+    const res = await fetch('https://my-api.plantnet.org/v2/identify/all?api-key=' + encodeURIComponent(PLANTNET_KEY) + '&lang=en&nb-results=5&include-related-images=false', { method: 'POST', body: form });
+    if (!ident) return; // left the page meanwhile
+    if (res.status === 404) throw { msg: 'No plant recognised in this photo. Try again closer, with one leaf or flower filling most of the picture.' };
+    if (res.status === 429) throw { msg: 'The free identifications for today are used up. Try again tomorrow, or search by name.' };
+    if (!res.ok) throw { msg: 'Identification did not work (' + res.status + '). Try again later, or search by name.' };
+    const j = await res.json();
+    const results = (j.results || []).filter(r => r.score >= 0.02).slice(0, 5).map(r => {
+      const x = { score: r.score, latin: r.species.scientificNameWithoutAuthor, genus: (r.species.genus || {}).scientificNameWithoutAuthor, family: (r.species.family || {}).scientificNameWithoutAuthor, common: (r.species.commonNames || [])[0] || '' };
+      return Object.assign(x, careFor(x));
+    });
+    if (!results.length) throw { msg: 'No plant recognised in this photo. Try again closer, with one leaf or flower filling most of the picture.' };
+    Object.assign(ident, { state: 'results', results });
+  } catch (e) {
+    if (!ident) return;
+    Object.assign(ident, { state: 'error', msg: e.msg || (navigator.onLine === false ? 'You are offline: identifying needs the internet.' : 'Identification did not work. Try again, or search by name.') });
+  }
+  renderAdd('');
+}
+function identHtml() {
+  let html = ident.photo ? '<img class="hero" src="' + ident.photo + '" alt="">' : '';
+  if (ident.state === 'busy') return html + '<div class="card" style="text-align:center"><b>Identifying…</b><div class="muted">This takes a few seconds.</div></div>';
+  if (ident.state === 'error') return html + '<div class="note warn">' + esc(ident.msg) + '</div><button class="btn primary wide" data-identify style="margin-top:12px">📷 Try another photo</button><button class="btn wide" style="margin-top:8px;background:none" data-identclear>Search by name instead</button>';
+  html += '<div class="card species-list"><h2>Is it one of these?</h2>';
+  html += ident.results.map((r, i) => {
+    const s = LIB[r.sp];
+    const care = r.how === 'guide' ? '✅ In your care guide: ' + s.name : r.how === 'relative' ? '✅ Care of a close relative: ' + s.name : 'Basic routine: ' + s.name.toLowerCase();
+    return '<div class="item" data-identpick="' + i + '"><div class="thumb">' + s.emoji + '</div><div class="grow"><div class="name">' + esc(r.common || r.latin) + ' <span class="muted">' + Math.round(r.score * 100) + '%</span></div><div class="muted"><i>' + esc(r.latin) + '</i></div><div class="muted" style="margin-top:2px">' + esc(care) + '</div></div><span class="muted">›</span></div>';
+  }).join('');
+  html += '</div><div class="muted" style="margin:0 4px 10px">The % is how sure Pl@ntNet is. Below 20%, a closer photo of a leaf usually helps.</div>';
+  return html + '<button class="btn wide" data-identify>📷 Try another photo</button><button class="btn wide" style="margin-top:8px;background:none" data-identclear>None of these: search by name</button>';
+}
+function identPick(i) {
+  const r = ident.results[i]; const s = LIB[r.sp];
+  draft = { sp: r.sp, nick: '', room: rooms()[0] || '', photo: ident.photo, last: '7', dir: null, dist: 'near' };
+  if (s.generic) { draft.common = r.common || r.latin; draft.latin = r.latin; }
+  else if (r.how === 'relative') draft.nick = r.common || r.latin;
+  ident = null; renderAdd(''); document.getElementById('addPage').scrollTop = 0;
 }
 
 // ---------- Photos ----------
@@ -754,6 +861,7 @@ photoInput.onchange = async () => {
   const file = photoInput.files[0]; photoInput.value = '';
   if (!file || !photoTarget) return;
   try {
+    if (photoTarget === 'identify') return identify(file);
     const url = await shrinkPhoto(file, 720, 0.72);
     if (photoTarget === 'draft') { readDraftFields(); draft.photo = url; renderAdd(''); }
     else { const p = findPlant(photoTarget); const old = p.photo; p.photo = url; if (!save()) p.photo = old; renderPlantPage(); }
@@ -1092,7 +1200,7 @@ function onUser(u) {
   render();
 }
 function norm(p) {
-  return { id: p.id, sp: p.sp, nick: p.nick || '', room: p.room || '', photo: p.photo || null, dir: p.dir == null ? null : p.dir,
+  return { id: p.id, sp: p.sp, ...(p.common ? { common: p.common } : {}), ...(p.latin ? { latin: p.latin } : {}), nick: p.nick || '', room: p.room || '', photo: p.photo || null, dir: p.dir == null ? null : p.dir,
     dist: p.dist || 'near', factor: p.factor || 1, added: p.added || now().toISOString(), snooze: p.snooze || null, due: p.due || null,
     log: (p.log || []).map(e => e.by ? { t: e.t, at: e.at, by: e.by } : { t: e.t, at: e.at })
       .sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.t < b.t ? -1 : a.t > b.t ? 1 : 0) };
@@ -1449,7 +1557,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar],[data-identify],[data-identpick],[data-identclear],[data-pickgen],[data-caretype]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -1458,10 +1566,15 @@ document.addEventListener('click', e => {
   if ('add' in d) return openAdd();
   if ('climateSave' in d) return saveClimate();
   if ('climate' in d) { const f = t.closest('.card').querySelector('#climateForm'); f.classList.toggle('hidden'); if (!f.classList.contains('hidden')) f.querySelector('input').focus(); return; }
-  if (d.pick) { draft = { sp: d.pick, nick: '', room: rooms()[0] || '', photo: null, last: '7', dir: null, dist: 'near' }; renderAdd(''); document.getElementById('addPage').scrollTop = 0; return; }
+  if (d.pick) { draft = { sp: d.pick, nick: '', room: rooms()[0] || '', photo: pendingPhoto, last: '7', dir: null, dist: 'near' }; pendingPhoto = null; renderAdd(''); document.getElementById('addPage').scrollTop = 0; return; }
   if ('addsave' in d) return saveDraft();
   if ('addback' in d) { draft = null; return renderAdd(''); }
   if (d.photo) { readDraftFields(); photoTarget = d.photo; photoInput.click(); return; }
+  if (t.hasAttribute('data-identify')) { identPhoto(); return; }
+  if (d.identpick != null) { identPick(+d.identpick); return; }
+  if (t.hasAttribute('data-identclear')) { const ph = ident && ident.photo; ident = null; pendingPhoto = ph; renderAdd(''); return; }
+  if (d.pickgen) { const q = (document.getElementById('spSearch') || {}).value || ''; draft = { sp: d.pickgen, nick: '', room: rooms()[0] || '', photo: pendingPhoto, last: '7', dir: null, dist: 'near' }; if (q.trim()) draft.common = q.trim(); pendingPhoto = null; renderAdd(''); document.getElementById('addPage').scrollTop = 0; return; }
+  if (d.caretype) { const p = findPlant(d.id); if (p && p.sp !== d.caretype) { const old = p.sp; p.sp = d.caretype; if (!save()) p.sp = old; renderPlantPage(); render(); } return; }
   if (d.compass) { readDraftFields(); return openCompass(d.compass); }
   if ('compassStart' in d) return startCompass();
   if ('compassSave' in d) { if (heading == null) { toast('No compass reading yet: pick the direction below.'); return; } return setDirection(heading); }
