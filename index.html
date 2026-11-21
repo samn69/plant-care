@@ -503,8 +503,15 @@ function render() {
     : tab === 'plants' ? (cloud.home ? '🏠 ' + cloud.home.name + ' · ' : '') + D.plants.length + (D.plants.length === 1 ? ' plant' : ' plants') : '';
   const n = todoItems().length; const badge = document.getElementById('todayBadge');
   badge.textContent = n; badge.classList.toggle('hidden', !n);
+  // A page is not redrawn while one of its fields is being edited: that would close an open picker or
+  // keyboard (and drop what was typed). It is redrawn when editing ends.
+  if (editingIn(document.getElementById('tab-' + tab))) { redrawLater = true; return; }
+  redrawLater = false;
   if (tab === 'today') renderToday(); else if (tab === 'plants') renderPlants(); else renderSettings();
 }
+let redrawLater = false;
+function editingIn(el) { const a = document.activeElement; return !!(a && el && el.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)); }
+document.addEventListener('focusout', () => setTimeout(() => { if (redrawLater && !editingIn(document.getElementById('tab-' + tab))) render(); }, 0));
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // ---------- Today ----------
@@ -1405,7 +1412,8 @@ function renderSettings() {
   html += '<div class="card"><h2>About</h2><div class="muted">Plant Care · care advice is general guidance: always check the soil with a finger before watering.</div></div>';
   el.innerHTML = html;
   document.getElementById('importInput').onchange = importBackup;
-  const nt = document.getElementById('notifyTime'); if (nt) nt.onchange = () => saveNotifyTime(nt.value);
+  // saved when the picker closes, not on every turn of the wheel
+  const nt = document.getElementById('notifyTime'); if (nt) nt.onblur = () => { if (nt.value !== notifyTime()) saveNotifyTime(nt.value); };
 }
 function exportBackup() {
   const blob = new Blob([JSON.stringify(D)], { type: 'application/json' });
