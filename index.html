@@ -504,7 +504,9 @@ function render() {
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // ---------- Today ----------
-function loadingCard() { return '<div class="card empty"><div class="big">🏠</div>Loading your home…</div>'; }
+function loadingCard() {
+  return '<div class="card empty"><div class="big">🏠</div>Loading your home…' + (cloud.slow ? '<p class="muted" style="margin:8px 0">This is taking long: check the connection.</p><button class="btn" data-reload>Try again</button>' : '') + '</div>';
+}
 function renderToday() {
   const el = document.getElementById('tab-today');
   if (homePending()) { el.innerHTML = loadingCard(); return; }
@@ -986,7 +988,14 @@ function weatherCard() {
 
 // ---------- Sharing: sign-in and homes (Firebase) ----------
 // The web app config from the Firebase console. It is not a secret: firestore.rules protect the data.
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyC6VP9oQEUCT4J0bWXbfDb-KbOY_BCGjHU',
+  authDomain: 'plant-care-b46d8.firebaseapp.com',
+  projectId: 'plant-care-b46d8',
+  storageBucket: 'plant-care-b46d8.firebasestorage.app',
+  messagingSenderId: '483347582259',
+  appId: '1:483347582259:web:754965eaf1624294df4246'
+};
 const FB_VERSION = '10.14.1';
 const cloud = { user: null, authKnown: false, failed: false, homes: [], homesLoaded: false, invites: [], home: null, homeId: null, loading: false, synced: {}, climateJson: 'null', unsub: [], watch: [], db: null, auth: null, creating: false };
 function cloudActive() { return !!(cloud.user && cloud.homeId); }
@@ -1004,9 +1013,11 @@ async function initCloud() {
   catch (e) { cloud.failed = true; render(); return; }
   if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
   cloud.auth = firebase.auth(); cloud.db = firebase.firestore();
-  try { await cloud.db.enablePersistence({ synchronizeTabs: true }); } catch (e) {} // offline copy; fails harmlessly in private mode
+  // offline copy: must be switched on before first use, but sign-in must not wait for it (it can be slow to start)
+  try { cloud.db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
   cloud.auth.getRedirectResult().catch(e => toast(authError(e)));
   cloud.auth.onAuthStateChanged(onUser);
+  setTimeout(() => { if (!cloud.authKnown) { cloud.slow = true; render(); } }, 15000);
 }
 function authError(e) {
   if (e.code === 'auth/unauthorized-domain') return 'Sign-in is not allowed on this address yet (Firebase → Authentication → Settings → Authorized domains).';
@@ -1176,7 +1187,7 @@ function sharingCard() {
   let html = '<div class="card"><h2>Home & sharing</h2>';
   if (!FIREBASE_CONFIG) return html + '<div class="muted">Sharing with your family is being set up.</div></div>';
   if (cloud.failed) return html + '<div class="muted">Sharing could not load (no connection?). The plants on this phone still work.</div></div>';
-  if (!cloud.authKnown) return html + '<div class="muted">Loading…</div></div>';
+  if (!cloud.authKnown) return html + (cloud.slow ? '<div class="muted" style="margin-bottom:8px">Sign-in is taking long: check the connection.</div><button class="btn wide" data-reload>Try again</button></div>' : '<div class="muted">Loading…</div></div>');
   if (!cloud.user) return html + '<div class="muted" style="margin-bottom:10px">Share your plants with your family: everyone sees the same plants, what is due, and who watered them.</div><button class="btn primary wide" data-signin>Sign in with Google</button></div>';
   html += '<div class="row" style="margin-bottom:6px"><div class="grow"><b>' + esc(cloud.user.displayName || myName()) + '</b><div class="muted">' + esc(myEmail()) + '</div></div><button class="btn small" data-signout>Sign out</button></div>';
   for (const h of cloud.invites) {
@@ -1270,7 +1281,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -1309,6 +1320,7 @@ document.addEventListener('click', e => {
   if ('citysearch' in d) return searchCity();
   if (d.cityi) { const c = citySearch.results[+d.cityi]; setLocation({ lat: round2(c.latitude), lon: round2(c.longitude), name: c.name, country: c.country || '', source: 'search' }); closePage('locPage'); toast('Location: ' + c.name); return; }
   if ('loclater' in d) { D.settings.locAsked = true; save(); closePage('locPage'); return; }
+  if ('reload' in d) return location.reload();
   if ('signin' in d) return signIn();
   if ('signout' in d) return signOut();
   if (d.joinhome) return joinHome(cloud.invites.find(h => h.id === d.joinhome));
