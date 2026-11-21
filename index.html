@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Plants">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#F2F4F1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <title>Plant Care</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="apple-touch-icon.png">
+  <style>
+    :root {
+      --bg: #F2F4F1; --card: #FFFFFF; --text: #1A1A1A; --text2: #64695F;
+      --border: #E2E6DF; --green: #1F6B4A; --green-soft: #E7F2EC; --blue: #1D6FA5; --blue-soft: #EAF1F7;
+      --amber: #9A5B00; --amber-soft: #FBF1E0; --red: #B3382C; --red-soft: #FBEDEB;
+      --fill: #EEF0EC; --nav-bg: rgba(255,255,255,0.94); --shadow: 0 1px 4px rgba(0,0,0,0.05);
+      --safe-b: env(safe-area-inset-bottom, 16px); --safe-t: env(safe-area-inset-top, 0px);
+      --nav-pad-b: max(0px, calc(var(--safe-b) - 14px));
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #000000; --card: #1C1C1E; --text: #F2F2F7; --text2: #9EA39A;
+        --border: #38383A; --green: #4CC38A; --green-soft: #15302A; --blue: #3D95DB; --blue-soft: #14283A;
+        --amber: #F0B45A; --amber-soft: #3A2C14; --red: #FF6B61; --red-soft: #3A1F1D;
+        --fill: #2C2C2E; --nav-bg: rgba(28,28,30,0.92); --shadow: none;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: var(--bg); color: var(--text); max-width: 430px; margin: 0 auto; min-height: 100vh; font-size: 15px; line-height: 1.4; }
+    body.page-open { overflow: hidden; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    input, select { font: inherit; font-size: 16px; color: var(--text); background: var(--fill); border: none; border-radius: 10px; padding: 10px 12px; width: 100%; }
+    header.top { padding: calc(var(--safe-t) + 14px) 18px 6px; }
+    header.top h1 { font-size: 28px; font-weight: 700; }
+    header.top .sub { color: var(--text2); font-size: 14px; }
+    main { padding: 8px 14px calc(90px + var(--safe-b)); }
+    .tab { display: none; }
+    .tab.active { display: block; }
+    .card { background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+    .card h2 { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+    .muted { color: var(--text2); font-size: 13px; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .grow { flex: 1; min-width: 0; }
+    .btn { border: none; border-radius: 10px; padding: 9px 14px; font-weight: 600; background: var(--fill); }
+    .btn.primary { background: var(--green); color: #fff; }
+    .btn.small { padding: 6px 10px; font-size: 13px; }
+    .btn.danger { color: var(--red); }
+    .btn.wide { width: 100%; padding: 12px; }
+    .linkbtn { border: none; background: none; color: var(--green); font-weight: 600; padding: 4px 0; }
+    .thumb { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; background: var(--green-soft); display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+    .item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+    .item:first-of-type { border-top: none; }
+    .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tag { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 6px; padding: 2px 7px; }
+    .tag.late { background: var(--red-soft); color: var(--red); }
+    .tag.today { background: var(--amber-soft); color: var(--amber); }
+    .tag.ok { background: var(--green-soft); color: var(--green); }
+    .tag.info { background: var(--blue-soft); color: var(--blue); }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .note { border-radius: 12px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; }
+    .note.season { background: var(--green-soft); }
+    .note.warn { background: var(--amber-soft); }
+    .empty { text-align: center; padding: 28px 10px; color: var(--text2); }
+    .empty .big { font-size: 40px; }
+    .room-title { font-size: 13px; font-weight: 600; color: var(--text2); margin: 14px 4px 6px; text-transform: uppercase; letter-spacing: .04em; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 5px; }
+    .seg { display: flex; background: var(--fill); border-radius: 10px; padding: 3px; gap: 3px; }
+    .seg button { flex: 1; border: none; background: none; border-radius: 8px; padding: 7px 4px; font-size: 13px; }
+    .seg button.on { background: var(--card); font-weight: 600; box-shadow: var(--shadow); }
+    .kv { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 14px; }
+    .kv:first-of-type { border-top: none; }
+    .kv .k { color: var(--text2); }
+    .kv .v { text-align: right; }
+    .season-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; font-size: 12px; }
+    .season-grid div { background: var(--fill); border-radius: 8px; padding: 6px 2px; }
+    .season-grid .now { background: var(--green-soft); color: var(--green); font-weight: 600; }
+    /* Bottom bar */
+    nav.bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 430px; background: var(--nav-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--border); display: flex; padding: 6px 0 var(--nav-pad-b); z-index: 50; }
+    nav.bar button { flex: 1; border: none; background: none; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--text2); padding: 4px 0; }
+    nav.bar button svg { width: 25px; height: 25px; }
+    nav.bar button.active { color: var(--green); }
+    .badge { position: absolute; margin-left: 22px; margin-top: -2px; background: var(--red); color: #fff; font-size: 11px; border-radius: 9px; padding: 0 5px; min-width: 18px; }
+    /* Full pages (no pop-ups over scrolling screens) */
+    .page { position: fixed; inset: 0; background: var(--bg); z-index: 100; overflow-y: auto; display: none; max-width: 430px; margin: 0 auto; }
+    .page.open { display: block; }
+    .page .pagehead { position: sticky; top: 0; background: var(--bg); padding: calc(var(--safe-t) + 10px) 14px 8px; display: flex; align-items: center; gap: 8px; z-index: 2; }
+    .page .pagehead h1 { font-size: 18px; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .page .pagebody { padding: 4px 14px calc(30px + var(--safe-b)); }
+    .back { border: none; background: none; color: var(--green); font-weight: 600; font-size: 16px; padding: 6px 4px; }
+    #compassPage { z-index: 120; }
+    .hero { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 14px; margin-bottom: 12px; background: var(--green-soft); display: flex; align-items: center; justify-content: center; font-size: 70px; }
+    .species-list .item { cursor: pointer; }
+    .dial { width: 220px; height: 220px; border-radius: 50%; border: 3px solid var(--border); margin: 18px auto; position: relative; background: var(--card); }
+    .dial .needle { position: absolute; left: 50%; top: 14px; width: 4px; height: 96px; margin-left: -2px; background: var(--green); border-radius: 2px; transform-origin: 50% 96px; }
+    .dial .letter { position: absolute; font-weight: 700; color: var(--text2); font-size: 14px; }
+    .heading-big { text-align: center; font-size: 40px; font-weight: 300; }
+    .dirgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(80px + var(--safe-b)); background: #222; color: #fff; border-radius: 12px; padding: 10px 14px; display: none; align-items: center; gap: 14px; z-index: 200; font-size: 14px; max-width: 92%; }
+    .toast.show { display: flex; }
+    .toast button { border: none; background: none; color: #8FE0B5; font-weight: 700; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1 id="title">Today</h1>
+    <div class="sub" id="subtitle"></div>
+  </header>
+
+  <main>
+    <section class="tab active" id="tab-today"></section>
+    <section class="tab" id="tab-plants"></section>
+    <section class="tab" id="tab-settings"></section>
+  </main>
+
+  <nav class="bar">
+    <button data-tab="today" class="active" aria-label="Today">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/></svg>
+      <span id="todayBadge" class="badge hidden"></span>Today
+    </button>
+    <button data-tab="plants" aria-label="Plants">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10M12 20v-8"/><path d="M12 12c0-4 3-7 7-7 0 4-3 7-7 7zM12 14c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z"/></svg>
+      Plants
+    </button>
+    <button data-tab="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Settings
+    </button>
+  </nav>
+
+  <div class="page" id="plantPage">
+    <div class="pagehead"><button class="back" data-close="plantPage">‹ Back</button><h1 id="plantPageTitle"></h1></div>
+    <div class="pagebody" id="plantPageBody"></div>
+  </div>
+
+  <div class="page" id="addPage">
+    <div class="pagehead"><button class="back" data-close="addPage">‹ Back</button><h1 id="addPageTitle">Add a plant</h1></div>
+    <div class="pagebody" id="addPageBody"></div>
+  </div>
+
+  <div class="page" id="compassPage">
+    <div class="pagehead"><button class="back" data-close="compassPage">‹ Back</button><h1>Window direction</h1></div>
+    <div class="pagebody" id="compassBody"></div>
+  </div>
+
+  <div class="toast" id="toast"><span id="toastText"></span><button id="toastUndo">Undo</button></div>
+
+  <input type="file" id="photoInput" accept="image/*" class="hidden">
+
+<script>
+'use strict';
+// ---------- Care library ----------
+// water / feed: days between waterings / feedings for each season (0 = no feeding).
+// light: sun | bright | bright-soft (no hot direct sun) | medium (no direct sun) | any
+const LIB = {
+  ficus: { name: 'Rubber plant', latin: 'Ficus elastica', aka: ['ficus', 'rubber tree', 'ficus alastica'], emoji: '🌳',
+    water: { winter: 16, spring: 10, summer: 7, autumn: 12 }, feed: { winter: 0, spring: 28, summer: 21, autumn: 0 },
+    light: 'bright', hum: 40, mist: false, tmin: 12, temp: '16–27 °C', toxic: true,
+    check: 'the top 3–5 cm of soil is dry',
+    tips: { winter: 'Wipe dust off the big leaves so they catch the weak winter light. Keep it away from radiators.',
+      spring: 'Repot every 2–3 years now, when roots circle the pot.',
+      summer: 'Morning sun is fine; keep it out of harsh afternoon sun behind glass.',
+      autumn: 'It does not like being moved: a few dropped leaves after moving are normal.' },
+    note: 'Dropping lower leaves usually means too much or too little water, or a cold draught.' },
+  dracaena: { name: 'Dracaena', latin: 'Dracaena fragrans', aka: ['corn plant', 'dracena', 'lemon lime', 'massangeana'], emoji: '🌴',
+    water: { winter: 21, spring: 12, summer: 9, autumn: 14 }, feed: { winter: 0, spring: 28, summer: 28, autumn: 0 },
+    light: 'bright-soft', hum: 40, mist: false, tmin: 13, temp: '18–27 °C', toxic: true,
+    check: 'the top 3 cm of soil is dry',
+    tips: { winter: 'Brown leaf tips in winter usually mean dry heated air.',
+      spring: 'Repot every 2–3 years now if it is root-bound.',
+      summer: 'Bright light without hot midday sun, which burns the striped leaves.',
+      autumn: 'Water less as the days get shorter.' },
+    note: 'Use water that has stood overnight, or filtered water: fluoride and chlorine in tap water cause brown tips.' },
+  alocasia: { name: 'Elephant ear', latin: 'Alocasia', aka: ['elephant ear', 'alocasia'], emoji: '🍃',
+    water: { winter: 12, spring: 7, summer: 5, autumn: 9 }, feed: { winter: 0, spring: 14, summer: 14, autumn: 0 },
+    light: 'bright-soft', hum: 60, mist: true, tmin: 15, temp: '18–27 °C', toxic: true,
+    check: 'the top 2–3 cm of soil is dry; never let it stand in water',
+    tips: { winter: 'It may drop leaves and rest in winter: water less, it comes back in spring. Check leaf undersides for spider mites in dry air.',
+      spring: 'New leaves start: water and feed more.',
+      summer: 'Its fastest growth: keep the soil lightly moist and the air humid.',
+      autumn: 'Keep it away from cold windows and draughts.' },
+    note: 'Loves humid air: a humidifier or a tray of wet pebbles under the pot helps most.' },
+  calathea: { name: 'Calathea Beauty Star', latin: 'Goeppertia ornata ‘Beauty Star’', aka: ['calathea', 'beauty star', 'prayer plant', 'goeppertia'], emoji: '🌿',
+    water: { winter: 10, spring: 7, summer: 5, autumn: 8 }, feed: { winter: 0, spring: 28, summer: 28, autumn: 0 },
+    light: 'medium', hum: 50, mist: true, tmin: 16, temp: '18–26 °C', toxic: false,
+    check: 'the top 2 cm of soil is just dry; keep it lightly moist',
+    tips: { winter: 'Dry heated air is its biggest problem: keep it away from radiators and raise the humidity.',
+      spring: 'Feed at half strength.',
+      summer: 'No direct sun: the pattern fades and the leaves curl.',
+      autumn: 'Water a little less, but do not let it dry out completely.' },
+    note: 'Use soft, room-temperature water (filtered or rain water). Curling leaves = thirsty or the air is too dry.' },
+  pothos: { name: 'Pothos', latin: 'Epipremnum aureum', aka: ['pethos', 'devil’s ivy', 'golden pothos', 'epipremnum'], emoji: '🌱',
+    water: { winter: 16, spring: 10, summer: 7, autumn: 12 }, feed: { winter: 0, spring: 28, summer: 28, autumn: 0 },
+    light: 'any', hum: 30, mist: false, tmin: 12, temp: '15–29 °C', toxic: true,
+    check: 'the top half of the soil is dry; drooping leaves mean it is thirsty',
+    tips: { winter: 'It grows slowly now: water rarely.',
+      spring: 'Trim long vines; the cuttings root easily in water.',
+      summer: 'More light = more colour in the leaves.',
+      autumn: 'Water less as growth slows.' },
+    note: 'Very forgiving. Yellow leaves usually mean too much water.' },
+  sansevieria: { name: 'Snake plant', latin: 'Dracaena trifasciata (Sansevieria)', aka: ['sansevieria', 'sansveria', 'snake plant', 'mother-in-law’s tongue'], emoji: '🪴',
+    water: { winter: 42, spring: 21, summer: 14, autumn: 28 }, feed: { winter: 0, spring: 56, summer: 56, autumn: 0 },
+    light: 'any', hum: 0, mist: false, tmin: 10, temp: '15–29 °C', toxic: true,
+    check: 'the soil is completely dry all the way down',
+    tips: { winter: 'Barely water: once in about 6 weeks is enough.',
+      spring: 'Repot only when it cracks its pot.',
+      summer: 'Bright light makes it grow faster.',
+      autumn: 'Start watering less.' },
+    note: 'Too much water is the only real danger (root rot). No misting.' },
+  zz: { name: 'ZZ plant', latin: 'Zamioculcas zamiifolia', aka: ['zz', 'zamioculcas', 'zamafolia', 'zanzibar gem'], emoji: '🌿',
+    water: { winter: 35, spring: 18, summer: 14, autumn: 25 }, feed: { winter: 0, spring: 42, summer: 42, autumn: 0 },
+    light: 'any', hum: 0, mist: false, tmin: 12, temp: '15–28 °C', toxic: true,
+    check: 'the soil is completely dry',
+    tips: { winter: 'Water about once a month or less.',
+      spring: 'New shoots appear: water a bit more.',
+      summer: 'Avoid harsh direct sun.',
+      autumn: 'Water less.' },
+    note: 'Stores water in its thick roots. Yellow stems mean too much water.' },
+  monstera: { name: 'Monstera', latin: 'Monstera deliciosa', aka: ['swiss cheese plant', 'monstera'], emoji: '🌿',
+    water: { winter: 16, spring: 9, summer: 7, autumn: 12 }, feed: { winter: 0, spring: 21, summer: 21, autumn: 0 },
+    light: 'bright', hum: 45, mist: true, tmin: 13, temp: '18–29 °C', toxic: true,
+    check: 'the top 5 cm of soil is dry',
+    tips: { winter: 'Wipe the leaves and keep it away from cold glass.',
+      spring: 'Give it a moss pole to climb; repot every 2 years.',
+      summer: 'More light = bigger leaves with more splits.',
+      autumn: 'Water less as growth slows.' },
+    note: 'Aerial roots are normal: guide them into the pot or onto the pole.' },
+  pilea: { name: 'Chinese money plant', latin: 'Pilea peperomioides', aka: ['pilea', 'chinese money plant', 'pancake plant', 'ufo plant'], emoji: '🪙',
+    water: { winter: 16, spring: 10, summer: 7, autumn: 12 }, feed: { winter: 0, spring: 28, summer: 28, autumn: 0 },
+    light: 'bright', hum: 30, mist: false, tmin: 10, temp: '13–27 °C', toxic: false,
+    check: 'the top 2–3 cm of soil is dry',
+    tips: { winter: 'Keep it bright; turn the pot every week.',
+      spring: 'Pot up the baby plants (pups) growing at the base.',
+      summer: 'Morning sun is fine, hot midday sun is not.',
+      autumn: 'Water less.' },
+    note: 'Turn the pot a quarter every week: it leans to the light.' },
+  cactus: { name: 'Cactus', latin: 'Cactaceae (desert cacti)', aka: ['kactos', 'kaktus', 'cacti', 'parodia', 'cereus'], emoji: '🌵',
+    water: { winter: 45, spring: 18, summer: 12, autumn: 28 }, feed: { winter: 0, spring: 35, summer: 35, autumn: 0 },
+    light: 'sun', hum: 0, mist: false, tmin: 5, temp: '10–30 °C', toxic: false,
+    check: 'the soil is completely dry; water thoroughly, then empty the saucer',
+    tips: { winter: 'Winter rest: water very little and keep it bright and cool (10–15 °C if possible); that is what makes many cacti flower.',
+      spring: 'Start watering again slowly.',
+      summer: 'As much sun as possible.',
+      autumn: 'Water less and less, getting it ready for its winter rest.' },
+    note: 'The brightest window you have, south is best. No misting.' }
+};
+const SEASONS = ['winter', 'spring', 'summer', 'autumn'];
+const SEASON_ICON = { winter: '❄️', spring: '🌱', summer: '☀️', autumn: '🍂' };
+const SEASON_NOTE = {
+  winter: 'Plants rest: water less, no fertilizer, keep them away from radiators and cold glass.',
+  spring: 'Growth starts: water more often, start feeding, repot if needed.',
+  summer: 'Main growth: water most often, feed regularly, shade from harsh midday sun.',
+  autumn: 'Growth slows: water less and stop feeding.'
+};
+const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const DIR_NAME = { N: 'North', NE: 'North-east', E: 'East', SE: 'South-east', S: 'South', SW: 'South-west', W: 'West', NW: 'North-west' };
+const DIR_LIGHT = { N: 1, NE: 1.5, E: 2, SE: 2.5, S: 3, SW: 2.5, W: 2, NW: 1.5 };
+const DIST = { sill: { label: 'On the windowsill', d: 0 }, near: { label: 'Within 1 m', d: -0.5 }, mid: { label: '1–2 m away', d: -1 }, far: { label: 'More than 2 m away', d: -2 } };
+const CLIMATE_FRESH_DAYS = 7;
+
+// ---------- Data ----------
+const KEY = 'pc_data';
+let D = load();
+function blank() { return { v: 1, plants: [], climate: null, settings: { hemi: 'N' } }; }
+function load() {
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && Array.isArray(d.plants)) return Object.assign(blank(), d); } catch (e) {}
+  return blank();
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(D)); return true; }
+  catch (e) { toast('Phone storage is full: the last change was not saved.'); return false; }
+}
+
+// ---------- Dates ----------
+const DAY = 864e5;
+function now() { return window.__NOW ? new Date(window.__NOW) : new Date(); }
+function dayStart(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function today() { return dayStart(now()); }
+function addDays(d, n) { const x = dayStart(d); x.setDate(x.getDate() + n); return x; }
+function daysBetween(a, b) { return Math.round((dayStart(b) - dayStart(a)) / DAY); }
+function fmtDate(d) { return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
+function ago(d) {
+  const n = daysBetween(d, today());
+  return n <= 0 ? 'today' : n === 1 ? 'yesterday' : n + ' days ago';
+}
+function inDays(n) { return n === 0 ? 'today' : n === 1 ? 'tomorrow' : 'in ' + n + ' days'; }
+function every(days) {
+  if (days >= 40) return 'about every ' + Math.round(days / 7) + ' weeks';
+  if (days >= 26) return 'about once a month';
+  if (days >= 13) return 'about every ' + Math.round(days / 7) + ' weeks';
+  return 'about every ' + days + ' days';
+}
+
+// ---------- Seasons ----------
+// Meteorological seasons: Dec–Feb winter in the north (Jun–Aug in the south).
+function seasonIndex(d) { const m = d.getMonth(); let s = (m === 11 || m <= 1) ? 0 : m <= 4 ? 1 : m <= 7 ? 2 : 3; if (D.settings.hemi === 'S') s = (s + 2) % 4; return s; }
+function seasonOf(d) { return SEASONS[seasonIndex(d)]; }
+function seasonStarts(d) {
+  // first day of the current season and of the next one
+  const t = dayStart(d); const starts = [];
+  for (let y = t.getFullYear() - 1; y <= t.getFullYear() + 1; y++) for (const m of [2, 5, 8, 11]) starts.push(new Date(y, m, 1));
+  const prev = starts.filter(s => s <= t).pop(); const next = starts.find(s => s > t);
+  return { prev, next };
+}
+
+// ---------- Care maths ----------
+function sp(p) { return LIB[p.sp]; }
+function dirOf(deg) { return DIRS[Math.round(((deg % 360) + 360) % 360 / 45) % 8]; }
+function lightScore(p) {
+  if (p.dir == null) return null;
+  return Math.max(0, Math.min(3, DIR_LIGHT[dirOf(p.dir)] + DIST[p.dist || 'near'].d));
+}
+function freshClimate() {
+  const c = D.climate; if (!c) return null;
+  return daysBetween(c.at, today()) <= CLIMATE_FRESH_DAYS ? c : null;
+}
+function waterInfo(p, at) {
+  const s = sp(p); const season = seasonOf(at || now()); const base = s.water[season];
+  let f = 1; const why = [];
+  const L = lightScore(p);
+  if (L != null && L >= 2.5) { f *= 0.85; why.push('bright spot, dries faster'); }
+  else if (L != null && L <= 1) { f *= 1.2; why.push('little light, dries slower'); }
+  const c = freshClimate();
+  if (c && c.temp >= 25) { f *= 0.85; why.push('warm room (' + c.temp + ' °C)'); }
+  else if (c && c.temp <= 17) { f *= 1.15; why.push('cool room (' + c.temp + ' °C)'); }
+  if (c && c.hum < 35) { f *= 0.9; why.push('dry air (' + c.hum + '%)'); }
+  const learned = p.factor || 1;
+  if (Math.abs(learned - 1) >= 0.04) { f *= learned; why.push(learned > 1 ? 'learned: its soil stays wet longer' : 'learned: its soil dries sooner'); }
+  return { season, base, days: Math.max(2, Math.round(base * f)), why };
+}
+function lastOf(p, t) {
+  let best = null;
+  for (const e of p.log) if (e.t === t && (!best || e.at > best)) best = e.at;
+  return best;
+}
+function waterStatus(p) {
+  const w = waterInfo(p); const last = lastOf(p, 'water');
+  let next = last ? addDays(last, w.days) : today();
+  if (p.snooze && (!last || p.snooze.set > last) && new Date(p.snooze.until) > next) next = dayStart(p.snooze.until);
+  return Object.assign(w, { last, next, due: daysBetween(today(), next), never: !last });
+}
+function feedStatus(p) {
+  const season = seasonOf(now()); const days = sp(p).feed[season];
+  if (!days) return { days: 0, season };
+  const last = lastOf(p, 'feed'); const from = last || p.added;
+  const next = addDays(from, days);
+  return { days, season, last, next, due: daysBetween(today(), next) };
+}
+function needsMist(p) {
+  const s = sp(p); const c = freshClimate();
+  if (!s.mist || !c || c.hum >= s.hum) return false;
+  const last = lastOf(p, 'mist');
+  return !last || daysBetween(last, today()) >= 1;
+}
+function lightVerdict(p) {
+  const s = sp(p); const L = lightScore(p); if (L == null) return null;
+  const dir = dirOf(p.dir); const sill = (p.dist || 'near') === 'sill';
+  const hot = sill && DIR_LIGHT[dir] >= 2.5;
+  let ok = true, text;
+  switch (s.light) {
+    case 'sun':
+      if (L >= 2.5) text = 'Great spot: a cactus wants as much sun as it can get.';
+      else if (L >= 1.5) text = 'OK, but brighter is better: the sunniest (south) window is best.';
+      else { ok = false; text = 'Too dark for a cactus: move it onto the sunniest windowsill.'; }
+      break;
+    case 'bright':
+      if (L >= 1.5) text = hot && dir !== 'E' && dir !== 'SE' ? 'Good light. In summer keep it out of harsh afternoon sun (a sheer curtain is enough).' : 'Good light for it.';
+      else { ok = false; text = 'Too dark: move it closer to a window.'; }
+      break;
+    case 'bright-soft':
+      if (hot) { ok = false; text = 'Direct sun on the windowsill can burn its leaves: about 1 m back from the window is better.'; }
+      else if (L >= 1.5) text = 'Good: bright without hot direct sun.';
+      else { ok = false; text = 'A bit dark: it grows slowly here. Closer to a window is better.'; }
+      break;
+    case 'medium':
+      if (sill && DIR_LIGHT[dir] >= 2) { ok = false; text = 'Too much direct sun: the leaves fade and curl. Keep it 1–2 m back or behind a sheer curtain.'; }
+      else if (L >= 0.5) text = 'Good: soft light without direct sun is what it likes.';
+      else { ok = false; text = 'Quite dark: it survives, but the leaf pattern stays brighter with more light.'; }
+      break;
+    default:
+      text = L >= 1 ? 'Fine here: it is happy in almost any light.' : 'Fine: it tolerates low light, it just grows slower.';
+  }
+  if (seasonOf(now()) === 'winter' && s.light !== 'any' && !sill && L < 2.5) text += ' In winter the light is weak, so closer to the window helps (not against cold glass).';
+  return { ok, text, dir, label: DIR_NAME[dir] + ' window · ' + DIST[p.dist || 'near'].label.toLowerCase() };
+}
+function climateNotes(p) {
+  const s = sp(p); const c = freshClimate(); const out = [];
+  if (!c) return out;
+  if (c.temp < s.tmin) out.push({ ok: false, text: 'Too cold: it needs at least ' + s.tmin + ' °C, the room is ' + c.temp + ' °C.' });
+  if (s.hum && c.hum < s.hum) out.push({ ok: false, text: 'The air is dry for it (' + c.hum + '%, it likes ' + s.hum + '%+)' + (s.mist ? ': mist the leaves in the morning, or use a humidifier or a tray of wet pebbles.' : '.') });
+  if (!out.length) out.push({ ok: true, text: 'Room climate is fine for it (' + c.temp + ' °C, ' + c.hum + '%).' });
+  return out;
+}
+
+// ---------- To-do ----------
+function todoItems() {
+  const items = [];
+  for (const p of D.plants) {
+    const w = waterStatus(p);
+    if (w.due <= 0) items.push({ p, kind: 'water', late: -w.due, never: w.never });
+    const f = feedStatus(p);
+    if (f.days && f.due <= 0) items.push({ p, kind: 'feed', late: -f.due });
+    if (needsMist(p)) items.push({ p, kind: 'mist', late: 0 });
+  }
+  const order = { water: 0, feed: 1, mist: 2 };
+  return items.sort((a, b) => b.late - a.late || order[a.kind] - order[b.kind]);
+}
+function upcoming(days) {
+  const out = [];
+  for (const p of D.plants) {
+    const w = waterStatus(p);
+    if (w.due > 0 && w.due <= days) out.push({ p, kind: 'water', due: w.due });
+    const f = feedStatus(p);
+    if (f.days && f.due > 0 && f.due <= days) out.push({ p, kind: 'feed', due: f.due });
+  }
+  return out.sort((a, b) => a.due - b.due);
+}
+
+// ---------- Actions (with undo) ----------
+let undoState = null, toastTimer = null;
+function snapshot() { return JSON.stringify(D); }
+function act(p, kind) {
+  const before = snapshot();
+  const at = now().toISOString();
+  if (kind === 'water') {
+    const w = waterStatus(p);
+    // watered 2+ days before it was due: its soil dries faster than the profile says
+    if (!w.never && w.due >= 2) p.factor = Math.max(0.6, (p.factor || 1) * 0.93);
+    p.snooze = null;
+  }
+  p.log.push({ t: kind, at });
+  if (p.log.length > 300) p.log = p.log.slice(-300);
+  save(); render();
+  const verb = { water: 'Watered', feed: 'Fed', mist: 'Misted' }[kind];
+  toast(verb + ' ' + plantName(p), before);
+}
+function snoozeWater(p) {
+  const before = snapshot();
+  p.factor = Math.min(1.6, (p.factor || 1) * 1.1); // soil still wet: learn that it dries slower
+  p.snooze = { set: now().toISOString(), until: addDays(today(), 3).toISOString() };
+  save(); render();
+  toast('OK, ' + plantName(p) + ' is checked again in 3 days', before);
+}
+function toast(text, before) {
+  undoState = before || null;
+  document.getElementById('toastText').textContent = text;
+  document.getElementById('toastUndo').classList.toggle('hidden', !before);
+  const t = document.getElementById('toast'); t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 4500);
+}
+document.getElementById('toastUndo').onclick = () => {
+  if (!undoState) return;
+  D = JSON.parse(undoState); undoState = null; save(); render();
+  if (openPlantId) renderPlantPage();
+  document.getElementById('toast').classList.remove('show');
+};
+
+// ---------- Helpers ----------
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function plantName(p) { return p.nick || sp(p).name; }
+function thumb(p, cls) { return p.photo ? '<img class="' + (cls || 'thumb') + '" src="' + p.photo + '" alt="">' : '<div class="' + (cls || 'thumb') + '">' + sp(p).emoji + '</div>'; }
+function findPlant(id) { return D.plants.find(p => p.id === id); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function rooms() { return [...new Set(D.plants.map(p => p.room).filter(Boolean))].sort(); }
+
+// ---------- Tabs ----------
+let tab = 'today';
+document.querySelectorAll('nav.bar button').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); window.scrollTo(0, 0); });
+function render() {
+  document.querySelectorAll('nav.bar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  // only the visible tab keeps its HTML, so form ids (climate fields) are never doubled
+  document.querySelectorAll('.tab').forEach(s => { const on = s.id === 'tab-' + tab; s.classList.toggle('active', on); if (!on) s.innerHTML = ''; });
+  const season = seasonOf(now());
+  document.getElementById('title').textContent = { today: 'Today', plants: 'My Plants', settings: 'Settings' }[tab];
+  document.getElementById('subtitle').textContent = tab === 'today'
+    ? now().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + SEASON_ICON[season] + ' ' + cap(season)
+    : tab === 'plants' ? D.plants.length + (D.plants.length === 1 ? ' plant' : ' plants') : '';
+  const n = todoItems().length; const badge = document.getElementById('todayBadge');
+  badge.textContent = n; badge.classList.toggle('hidden', !n);
+  if (tab === 'today') renderToday(); else if (tab === 'plants') renderPlants(); else renderSettings();
+}
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ---------- Today ----------
+function renderToday() {
+  const el = document.getElementById('tab-today');
+  if (!D.plants.length) {
+    el.innerHTML = '<div class="card empty"><div class="big">🪴</div><p>No plants yet.</p><p class="muted">Add your plants and the app works out when each one needs water, food and care, season by season.</p><br><button class="btn primary" data-add>Add a plant</button></div>';
+    return;
+  }
+  let html = seasonNote();
+  html += climateCard();
+  const items = todoItems();
+  html += '<div class="card"><h2>To do</h2>';
+  if (!items.length) html += '<div class="empty" style="padding:14px"><div class="big">🌿</div>All done for today.</div>';
+  for (const it of items) {
+    const p = it.p; const s = sp(p);
+    let what, tag;
+    if (it.kind === 'water') { what = '💧 Water if ' + s.check; tag = it.never ? '<span class="tag info">first time</span>' : it.late ? '<span class="tag late">' + it.late + (it.late === 1 ? ' day' : ' days') + ' late</span>' : '<span class="tag today">today</span>'; }
+    else if (it.kind === 'feed') { what = '🧪 Feed (liquid fertilizer in the water)'; tag = it.late ? '<span class="tag late">' + it.late + ' d late</span>' : '<span class="tag today">today</span>'; }
+    else { what = '💦 Mist the leaves: the air is dry'; tag = '<span class="tag info">dry air</span>'; }
+    html += '<div class="item"><div data-open="' + p.id + '">' + thumb(p) + '</div><div class="grow"><div class="name" data-open="' + p.id + '">' + esc(plantName(p)) + ' ' + tag + '</div><div class="muted">' + esc(what) + '</div>' +
+      '<div class="actions" style="margin-top:6px">' +
+      (it.kind === 'water' && !it.never ? '<button class="btn small" data-snooze="' + p.id + '">Still wet</button>' : '') +
+      '<button class="btn small primary" data-do="' + it.kind + '" data-id="' + p.id + '">✓ ' + { water: 'Watered', feed: 'Fed', mist: 'Misted' }[it.kind] + '</button></div></div></div>';
+  }
+  html += '</div>';
+  const up = upcoming(7);
+  if (up.length) {
+    html += '<div class="card"><h2>Next 7 days</h2>';
+    for (const u of up) html += '<div class="item" data-open="' + u.p.id + '">' + thumb(u.p) + '<div class="grow"><div class="name">' + esc(plantName(u.p)) + '</div><div class="muted">' + (u.kind === 'water' ? '💧 Water ' : '🧪 Feed ') + inDays(u.due) + '</div></div></div>';
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+function seasonNote() {
+  const t = today(); const { prev, next } = seasonStarts(t);
+  const season = seasonOf(t); const nextSeason = seasonOf(next);
+  const toNext = daysBetween(t, next); const since = daysBetween(prev, t);
+  let text = '<b>' + SEASON_ICON[season] + ' ' + cap(season) + ' routine.</b> ' + SEASON_NOTE[season];
+  if (toNext <= 14) text += '<br><span class="muted">' + SEASON_ICON[nextSeason] + ' The ' + nextSeason + ' routine starts ' + inDays(toNext) + ' (' + fmtDate(next) + '): ' + SEASON_NOTE[nextSeason].split(':')[1].trim() + '</span>';
+  else if (since <= 7) text += '<br><span class="muted">The ' + season + ' routine started on ' + fmtDate(prev) + '; every plant’s schedule has changed with it.</span>';
+  return '<div class="note season">' + text + '</div>';
+}
+function climateCard() {
+  const c = D.climate; const fresh = freshClimate();
+  let html = '<div class="card"><div class="row"><div class="grow"><h2 style="margin:0">Indoor climate</h2>';
+  if (c) html += '<div style="font-size:20px;font-weight:600;margin-top:4px">' + c.temp + ' °C · ' + c.hum + '%</div><div class="muted">' + (fresh ? 'Measured ' + ago(c.at) : 'Measured ' + ago(c.at) + ': out of date, not used') + '</div>';
+  else html += '<div class="muted" style="margin-top:4px">Type in your thermometer’s reading: dry or cold air changes what the plants need.</div>';
+  html += '</div><button class="btn small" data-climate>' + (c ? 'Update' : 'Add') + '</button></div>';
+  html += '<div id="climateForm" class="hidden" style="margin-top:10px"><div class="row"><div class="grow"><label class="muted">Temperature °C</label><input id="cTemp" type="text" inputmode="decimal" value="' + (c ? c.temp : '') + '"></div><div class="grow"><label class="muted">Humidity %</label><input id="cHum" type="text" inputmode="decimal" value="' + (c ? c.hum : '') + '"></div></div><button class="btn primary wide" style="margin-top:8px" data-climate-save>Save</button></div>';
+  return html + '</div>';
+}
+function saveClimate() {
+  const t = parseFloat(String(document.getElementById('cTemp').value).replace(',', '.'));
+  const h = parseFloat(String(document.getElementById('cHum').value).replace(',', '.'));
+  if (!(t > -10 && t < 50) || !(h >= 0 && h <= 100)) { toast('Please type a temperature and a humidity (0–100%).'); return; }
+  D.climate = { temp: Math.round(t * 10) / 10, hum: Math.round(h * 10) / 10, at: now().toISOString() };
+  save(); render(); toast('Indoor climate saved');
+}
+
+// ---------- Plants ----------
+function renderPlants() {
+  const el = document.getElementById('tab-plants');
+  let html = '<button class="btn primary wide" data-add style="margin-bottom:12px">＋ Add a plant</button>';
+  if (!D.plants.length) { el.innerHTML = html + '<div class="card empty"><div class="big">🪴</div>No plants yet.</div>'; return; }
+  const groups = {};
+  for (const p of D.plants) (groups[p.room || ''] = groups[p.room || ''] || []).push(p);
+  const names = Object.keys(groups).sort((a, b) => (a === '') - (b === '') || a.localeCompare(b));
+  for (const r of names) {
+    if (names.length > 1 || r) html += '<div class="room-title">' + esc(r || 'No room') + '</div>';
+    html += '<div class="card">';
+    for (const p of groups[r]) {
+      const w = waterStatus(p);
+      const tag = w.never ? '<span class="tag info">not logged yet</span>' : w.due < 0 ? '<span class="tag late">water ' + (-w.due) + ' d late</span>' : w.due === 0 ? '<span class="tag today">water today</span>' : '<span class="tag ok">water ' + inDays(w.due) + '</span>';
+      html += '<div class="item" data-open="' + p.id + '">' + thumb(p) + '<div class="grow"><div class="name">' + esc(plantName(p)) + '</div><div class="muted">' + esc(p.nick ? sp(p).name : sp(p).latin) + '</div><div style="margin-top:3px">' + tag + '</div></div><span class="muted">›</span></div>';
+    }
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ---------- Plant page ----------
+let openPlantId = null;
+function openPage(id) {
+  document.getElementById(id).classList.add('open'); document.getElementById(id).scrollTop = 0;
+  document.body.classList.add('page-open');
+}
+function closePage(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'compassPage') stopCompass();
+  if (id === 'plantPage') openPlantId = null;
+  if (!document.querySelector('.page.open')) document.body.classList.remove('page-open');
+  render();
+}
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => closePage(b.dataset.close));
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const open = [...document.querySelectorAll('.page.open')].sort((a, b) => getComputedStyle(b).zIndex - getComputedStyle(a).zIndex)[0];
+  if (open) closePage(open.id);
+});
+function openPlant(id) { openPlantId = id; renderPlantPage(); openPage('plantPage'); }
+function renderPlantPage() {
+  const p = findPlant(openPlantId); if (!p) { closePage('plantPage'); return; }
+  const s = sp(p); const w = waterStatus(p); const f = feedStatus(p); const season = w.season;
+  document.getElementById('plantPageTitle').textContent = plantName(p);
+  let html = '<div data-photo="' + p.id + '">' + (p.photo ? '<img class="hero" src="' + p.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
+  html += '<div class="row" style="margin:-4px 2px 12px"><div class="grow"><div style="font-size:20px;font-weight:700">' + esc(plantName(p)) + '</div><div class="muted"><i>' + esc(s.latin) + '</i>' + (p.room ? ' · ' + esc(p.room) : '') + '</div></div><button class="btn small" data-photo="' + p.id + '">' + (p.photo ? 'Change photo' : 'Add photo') + '</button></div>';
+  if (s.toxic) html += '<div class="note warn">⚠️ Toxic to cats and dogs if chewed.</div>';
+
+  // This season
+  html += '<div class="card"><h2>' + SEASON_ICON[season] + ' ' + cap(season) + ' care</h2>';
+  html += '<div class="kv"><span class="k">💧 Water</span><span class="v"><b>' + every(w.days) + '</b><br><span class="muted">when ' + esc(s.check) + '</span></span></div>';
+  if (w.why.length) html += '<div class="kv"><span class="k">Adjusted for</span><span class="v muted">' + esc(w.why.join(' · ')) + '<br>(standard: ' + every(w.base) + ')</span></div>';
+  html += '<div class="kv"><span class="k">Last watered</span><span class="v">' + (w.last ? ago(w.last) + ' (' + fmtDate(w.last) + ')' : 'not logged yet') + '</span></div>';
+  html += '<div class="kv"><span class="k">Next water</span><span class="v">' + (w.never ? 'today, then on schedule' : w.due < 0 ? '<span class="tag late">' + (-w.due) + ' days late</span>' : inDays(w.due) + ' (' + fmtDate(w.next) + ')') + '</span></div>';
+  html += '<div class="kv"><span class="k">🧪 Feed</span><span class="v">' + (f.days ? every(f.days) + '<br><span class="muted">next ' + (f.due <= 0 ? 'today' : inDays(f.due)) + '</span>' : 'no fertilizer this season') + '</span></div>';
+  html += '<div class="muted" style="margin-top:8px">' + esc(s.tips[season]) + '</div>';
+  html += '<div class="actions" style="margin-top:10px"><button class="btn small" data-do="feed" data-id="' + p.id + '">✓ Fed</button><button class="btn small primary" data-do="water" data-id="' + p.id + '">✓ Watered</button></div></div>';
+
+  // Light
+  const lv = lightVerdict(p);
+  html += '<div class="card"><h2>☀️ Light · ' + ({ sun: 'full sun', bright: 'bright, some sun', 'bright-soft': 'bright, no hot sun', medium: 'medium, no direct sun', any: 'any light' }[s.light]) + '</h2>';
+  if (lv) html += '<div style="margin-bottom:6px"><b>' + esc(lv.label) + '</b> <span class="muted">(' + Math.round(p.dir) + '°)</span></div><div class="' + (lv.ok ? '' : 'note warn') + '" style="' + (lv.ok ? 'margin-bottom:8px' : '') + '">' + (lv.ok ? '✅ ' : '') + esc(lv.text) + '</div>';
+  else html += '<div class="muted" style="margin-bottom:8px">Measure which way its window faces to get advice for its spot and a more accurate watering schedule.</div>';
+  html += '<div class="field"><label>Distance from the window</label>' + distSeg(p.dist || 'near', 'data-pdist="' + p.id + '"') + '</div>';
+  html += '<button class="btn small" data-compass="' + p.id + '">🧭 ' + (p.dir == null ? 'Measure window direction' : 'Measure again') + '</button></div>';
+
+  // Air
+  html += '<div class="card"><h2>🌡️ Temperature & humidity</h2>';
+  html += '<div class="kv"><span class="k">Likes</span><span class="v">' + s.temp + (s.hum ? ', humidity ' + s.hum + '%+' : ', dry air is fine') + '</span></div>';
+  const cn = climateNotes(p);
+  if (cn.length) for (const n of cn) html += '<div class="' + (n.ok ? 'muted' : 'note warn') + '" style="margin-top:8px">' + (n.ok ? '✅ ' : '') + esc(n.text) + '</div>';
+  else html += '<div class="muted" style="margin-top:8px">Add your indoor reading on the Today tab to check it against this plant.</div>';
+  html += '</div>';
+
+  // Year
+  html += '<div class="card"><h2>📅 Through the year</h2><div class="season-grid">';
+  for (const se of SEASONS) html += '<div class="' + (se === season ? 'now' : '') + '">' + SEASON_ICON[se] + '<br>' + cap(se) + '<br>💧 ' + shortEvery(s.water[se]) + '<br>🧪 ' + (s.feed[se] ? shortEvery(s.feed[se]) : '–') + '</div>';
+  html += '</div><div class="muted" style="margin-top:10px">' + esc(s.note) + '</div></div>';
+
+  // History
+  html += '<div class="card"><h2>History</h2>';
+  const log = p.log.slice().sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
+  if (!log.length) html += '<div class="muted">Nothing logged yet.</div>';
+  for (const e of log) html += '<div class="kv"><span>' + { water: '💧 Watered', feed: '🧪 Fed', mist: '💦 Misted' }[e.t] + '</span><span class="v muted">' + fmtDate(e.at) + ' · ' + ago(e.at) + ' <button class="linkbtn" data-unlog="' + esc(e.at) + '" data-t="' + e.t + '">Remove</button></span></div>';
+  html += '</div>';
+
+  // Details
+  html += '<div class="card"><h2>Details</h2>' +
+    '<div class="field"><label>Name (optional)</label><input id="ppNick" value="' + esc(p.nick || '') + '" placeholder="' + esc(s.name) + '"></div>' +
+    '<div class="field"><label>Room</label><input id="ppRoom" list="roomList" value="' + esc(p.room || '') + '" placeholder="e.g. Living room"></div>' + roomList() +
+    '<button class="btn primary wide" data-savedetails="' + p.id + '">Save details</button>' +
+    '<button class="btn danger wide" style="margin-top:8px;background:none" data-delete="' + p.id + '">Delete plant</button></div>';
+  if (p.factor && Math.abs(p.factor - 1) >= 0.04) html += '<div class="muted" style="text-align:center">Learned from you: waters ' + Math.round(Math.abs(p.factor - 1) * 100) + '% ' + (p.factor > 1 ? 'less' : 'more') + ' often than the standard. <button class="linkbtn" data-resetlearn="' + p.id + '">Reset</button></div>';
+  document.getElementById('plantPageBody').innerHTML = html;
+}
+function shortEvery(d) { return d >= 26 ? Math.round(d / 7) + ' wk' : d + ' d'; }
+function distSeg(cur, attr) {
+  return '<div class="seg">' + Object.keys(DIST).map(k => '<button ' + attr + ' data-dist="' + k + '" class="' + (k === cur ? 'on' : '') + '">' + { sill: 'Sill', near: '< 1 m', mid: '1–2 m', far: '> 2 m' }[k] + '</button>').join('') + '</div>';
+}
+function roomList() { return '<datalist id="roomList">' + rooms().map(r => '<option value="' + esc(r) + '">').join('') + '</datalist>'; }
+
+// ---------- Add a plant ----------
+let draft = null;
+function openAdd() { draft = null; renderAdd(''); openPage('addPage'); }
+function matches(key, q) {
+  const s = LIB[key]; q = q.trim().toLowerCase(); if (!q) return true;
+  return [s.name, s.latin, ...s.aka].some(x => x.toLowerCase().includes(q));
+}
+function renderAdd(q) {
+  const body = document.getElementById('addPageBody');
+  document.getElementById('addPageTitle').textContent = draft ? 'Add ' + LIB[draft.sp].name : 'Add a plant';
+  if (!draft) {
+    const list = Object.keys(LIB).filter(k => matches(k, q));
+    let html = '<div class="field"><input id="spSearch" placeholder="Search: e.g. Monstera, snake plant…" value="' + esc(q) + '" autocomplete="off"></div><div class="card species-list" id="spList">';
+    html += list.map(k => '<div class="item" data-pick="' + k + '"><div class="thumb">' + LIB[k].emoji + '</div><div class="grow"><div class="name">' + esc(LIB[k].name) + '</div><div class="muted"><i>' + esc(LIB[k].latin) + '</i></div></div><span class="muted">›</span></div>').join('');
+    if (!list.length) html += '<div class="muted">No plant matches “' + esc(q) + '”. More plants and identifying a plant from a photo are coming.</div>';
+    body.innerHTML = html + '</div>';
+    const inp = document.getElementById('spSearch');
+    inp.oninput = () => { const v = inp.value; const pos = inp.selectionStart; renderAdd(v); const n = document.getElementById('spSearch'); n.focus(); n.setSelectionRange(pos, pos); };
+    return;
+  }
+  const s = LIB[draft.sp];
+  let html = '<div data-photo="draft">' + (draft.photo ? '<img class="hero" src="' + draft.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
+  html += '<button class="btn wide" data-photo="draft" style="margin-bottom:14px">📷 ' + (draft.photo ? 'Change photo' : 'Take or choose a photo') + '</button>';
+  html += '<div class="field"><label>Name (optional, e.g. “Big Monstera”)</label><input id="adNick" value="' + esc(draft.nick) + '" placeholder="' + esc(s.name) + '"></div>';
+  html += '<div class="field"><label>Room</label><input id="adRoom" list="roomList" value="' + esc(draft.room) + '" placeholder="e.g. Living room"></div>' + roomList();
+  html += '<div class="field"><label>When was it last watered?</label><select id="adLast">' +
+    [['0', 'Today'], ['2', '2–3 days ago'], ['7', 'About a week ago'], ['14', 'About 2 weeks ago'], ['30', 'A month or more ago'], ['', 'I don’t know']].map(o => '<option value="' + o[0] + '"' + (draft.last === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>';
+  html += '<div class="field"><label>Its window</label><div class="row"><div class="grow">' + (draft.dir == null ? '<span class="muted">Not measured</span>' : '<b>' + DIR_NAME[dirOf(draft.dir)] + '</b> <span class="muted">(' + Math.round(draft.dir) + '°)</span>') + '</div><button class="btn small" data-compass="draft">🧭 Measure</button></div></div>';
+  html += '<div class="field"><label>Distance from the window</label>' + distSeg(draft.dist, 'data-ddist') + '</div>';
+  html += '<button class="btn primary wide" data-addsave>Add plant</button><button class="btn wide" style="margin-top:8px;background:none" data-addback>Choose another plant</button>';
+  body.innerHTML = html;
+}
+function readDraftFields() {
+  if (!draft) return;
+  const n = document.getElementById('adNick'); if (n) draft.nick = n.value.trim();
+  const r = document.getElementById('adRoom'); if (r) draft.room = r.value.trim();
+  const l = document.getElementById('adLast'); if (l) draft.last = l.value;
+}
+function saveDraft() {
+  readDraftFields();
+  const p = { id: uid(), sp: draft.sp, nick: draft.nick, room: draft.room, photo: draft.photo || null, dir: draft.dir, dist: draft.dist, factor: 1, added: now().toISOString(), log: [], snooze: null };
+  if (draft.last !== '') p.log.push({ t: 'water', at: addDays(today(), -parseInt(draft.last, 10)).toISOString() });
+  D.plants.push(p);
+  if (!save()) { D.plants.pop(); return; }
+  closePage('addPage'); tab = 'plants'; render();
+  toast(plantName(p) + ' added');
+}
+
+// ---------- Photos ----------
+let photoTarget = null;
+const photoInput = document.getElementById('photoInput');
+photoInput.onchange = async () => {
+  const file = photoInput.files[0]; photoInput.value = '';
+  if (!file || !photoTarget) return;
+  try {
+    const url = await shrinkPhoto(file, 720, 0.72);
+    if (photoTarget === 'draft') { readDraftFields(); draft.photo = url; renderAdd(''); }
+    else { const p = findPlant(photoTarget); const old = p.photo; p.photo = url; if (!save()) p.photo = old; renderPlantPage(); }
+  } catch (e) { toast('That photo could not be read. Try another one.'); }
+};
+function shrinkPhoto(file, max, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    img.src = url;
+  });
+}
+
+// ---------- Compass ----------
+let compassTarget = null, heading = null, compassOn = false, compassTimer = null;
+function openCompass(target) {
+  compassTarget = target; heading = null;
+  renderCompass('start'); openPage('compassPage');
+}
+function renderCompass(state, msg) {
+  const body = document.getElementById('compassBody');
+  let html = '';
+  if (state === 'start') {
+    html += '<div class="card"><p><b>How to measure</b></p><p class="muted" style="margin-top:6px">1. Stand where the plant is.<br>2. Hold the phone flat, screen up.<br>3. Point the top of the phone at the window.<br>4. Tap Save.</p></div>';
+    html += '<button class="btn primary wide" data-compass-start>Start compass</button>';
+  } else if (state === 'live') {
+    const h = heading == null ? null : Math.round(heading);
+    html += '<div class="dial"><span class="letter" style="left:50%;top:6px;margin-left:-5px">N</span><span class="letter" style="right:8px;top:50%;margin-top:-9px">E</span><span class="letter" style="left:50%;bottom:6px;margin-left:-4px">S</span><span class="letter" style="left:8px;top:50%;margin-top:-9px">W</span>' +
+      '<div class="needle" id="needle" style="transform:rotate(' + (h || 0) + 'deg)"></div></div>';
+    html += '<div class="heading-big" id="headingText">' + (h == null ? 'Waiting for the compass…' : h + '° ' + dirOf(h)) + '</div>';
+    html += '<p class="muted" style="text-align:center;margin:6px 0 14px">Point the top of the phone at the window</p>';
+    html += '<button class="btn primary wide" data-compass-save>Save this direction</button>';
+  } else {
+    html += '<div class="note warn">' + esc(msg) + '</div>';
+  }
+  html += '<div class="card" style="margin-top:14px"><h2>Or pick it yourself</h2><div class="dirgrid">' + DIRS.map((d, i) => '<button class="btn small" data-dirpick="' + (i * 45) + '">' + d + '</button>').join('') + '</div></div>';
+  body.innerHTML = html;
+}
+async function startCompass() {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted') { renderCompass('error', 'The compass was not allowed. To allow it later, close the app completely and open it again; or pick the direction below.'); return; }
+    }
+  } catch (e) { renderCompass('error', 'The compass could not start. Pick the direction below instead.'); return; }
+  compassOn = true; renderCompass('live');
+  window.addEventListener('deviceorientationabsolute', onOrientation, true);
+  window.addEventListener('deviceorientation', onOrientation, true);
+  compassTimer = setTimeout(() => { if (heading == null && compassOn) { stopCompass(); renderCompass('error', 'This device has no compass. Pick the direction below instead.'); } }, 3000);
+}
+function onOrientation(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) h = e.webkitCompassHeading;
+  else if (e.absolute && e.alpha != null) h = (360 - e.alpha) % 360;
+  if (h == null) return;
+  heading = h;
+  const n = document.getElementById('needle'); const t = document.getElementById('headingText');
+  if (n) n.style.transform = 'rotate(' + Math.round(h) + 'deg)';
+  if (t) t.textContent = Math.round(h) + '° ' + dirOf(h);
+}
+function stopCompass() {
+  compassOn = false; clearTimeout(compassTimer);
+  window.removeEventListener('deviceorientationabsolute', onOrientation, true);
+  window.removeEventListener('deviceorientation', onOrientation, true);
+}
+function setDirection(deg) {
+  deg = Math.round(deg) % 360;
+  if (compassTarget === 'draft') { draft.dir = deg; stopCompass(); document.getElementById('compassPage').classList.remove('open'); renderAdd(''); }
+  else { const p = findPlant(compassTarget); p.dir = deg; save(); stopCompass(); document.getElementById('compassPage').classList.remove('open'); renderPlantPage(); }
+  toast('Window: ' + DIR_NAME[dirOf(deg)] + ' (' + deg + '°)');
+}
+
+// ---------- Settings ----------
+function renderSettings() {
+  const el = document.getElementById('tab-settings');
+  let html = '<div class="card"><h2>Location</h2><div class="field"><label>Hemisphere (decides when the seasons change)</label><div class="seg">' +
+    [['N', 'Northern (Europe, US…)'], ['S', 'Southern (Australia…)']].map(h => '<button data-hemi="' + h[0] + '" class="' + (D.settings.hemi === h[0] ? 'on' : '') + '">' + h[1] + '</button>').join('') + '</div></div>' +
+    '<div class="muted">Finding your location from the phone is coming in the next update.</div></div>';
+  html += climateCard();
+  html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">Your plants are saved on this phone. Save a backup file now and then (sharing with your home comes in a later update).</div>' +
+    '<div class="row"><button class="btn grow" data-export>Save backup</button><button class="btn grow" data-import>Restore backup</button></div><input type="file" id="importInput" accept="application/json,.json" class="hidden"></div>';
+  html += '<div class="card"><h2>About</h2><div class="muted">Plant Care · care advice is general guidance: always check the soil with a finger before watering.</div></div>';
+  el.innerHTML = html;
+  document.getElementById('importInput').onchange = importBackup;
+}
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(D)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'plant-care-backup-' + now().toISOString().slice(0, 10) + '.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function importBackup(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d || !Array.isArray(d.plants) || d.plants.some(p => !LIB[p.sp])) throw new Error('bad');
+      const before = snapshot(); D = Object.assign(blank(), d); save(); render();
+      toast('Backup restored: ' + D.plants.length + ' plants', before);
+    } catch (err) { toast('That file is not a Plant Care backup.'); }
+  };
+  r.readAsText(file);
+}
+
+// ---------- One click handler for everything ----------
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-savedetails],[data-delete],[data-unlog],[data-resetlearn],[data-hemi],[data-export],[data-import]');
+  if (!t) return;
+  const d = t.dataset;
+  if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
+  if (d.snooze) return snoozeWater(findPlant(d.snooze));
+  if (d.open) return openPlant(d.open);
+  if ('add' in d) return openAdd();
+  if ('climateSave' in d) return saveClimate();
+  if ('climate' in d) { const f = t.closest('.card').querySelector('#climateForm'); f.classList.toggle('hidden'); if (!f.classList.contains('hidden')) f.querySelector('input').focus(); return; }
+  if (d.pick) { draft = { sp: d.pick, nick: '', room: rooms()[0] || '', photo: null, last: '7', dir: null, dist: 'near' }; renderAdd(''); document.getElementById('addPage').scrollTop = 0; return; }
+  if ('addsave' in d) return saveDraft();
+  if ('addback' in d) { draft = null; return renderAdd(''); }
+  if (d.photo) { readDraftFields(); photoTarget = d.photo; photoInput.click(); return; }
+  if (d.compass) { readDraftFields(); return openCompass(d.compass); }
+  if ('compassStart' in d) return startCompass();
+  if ('compassSave' in d) { if (heading == null) { toast('No compass reading yet: pick the direction below.'); return; } return setDirection(heading); }
+  if (d.dirpick) return setDirection(parseInt(d.dirpick, 10));
+  if (d.dist) {
+    if (d.pdist) { const p = findPlant(d.pdist); p.dist = d.dist; save(); renderPlantPage(); }
+    else { readDraftFields(); draft.dist = d.dist; renderAdd(''); }
+    return;
+  }
+  if (d.savedetails) {
+    const p = findPlant(d.savedetails); p.nick = document.getElementById('ppNick').value.trim(); p.room = document.getElementById('ppRoom').value.trim();
+    save(); renderPlantPage(); toast('Saved'); return;
+  }
+  if (d.delete) {
+    if (t.dataset.armed) { const before = snapshot(); D.plants = D.plants.filter(p => p.id !== d.delete); save(); closePage('plantPage'); toast('Plant deleted', before); }
+    else { t.dataset.armed = '1'; t.textContent = 'Tap again to delete'; setTimeout(() => { if (t.isConnected) { delete t.dataset.armed; t.textContent = 'Delete plant'; } }, 3000); }
+    return;
+  }
+  if (d.unlog) {
+    const p = findPlant(openPlantId); const before = snapshot();
+    const i = p.log.findIndex(x => x.at === d.unlog && x.t === d.t); if (i >= 0) p.log.splice(i, 1);
+    save(); renderPlantPage(); render(); toast('Removed from history', before); return;
+  }
+  if (d.resetlearn) { const p = findPlant(d.resetlearn); p.factor = 1; save(); renderPlantPage(); return; }
+  if (d.hemi) { D.settings.hemi = d.hemi; save(); render(); return; }
+  if ('export' in d) return exportBackup();
+  if ('import' in d) return document.getElementById('importInput').click();
+});
+
+render();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+// The date changes while the app stays open (e.g. overnight): refresh when it comes back.
+let lastDay = today().getTime();
+document.addEventListener('visibilitychange', () => { if (!document.hidden && today().getTime() !== lastDay) { lastDay = today().getTime(); render(); } });
+</script>
+</body>
+</html>
