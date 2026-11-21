@@ -28,4 +28,4 @@ Reminders also need two repository secrets for `.github/workflows/reminders.yml`
 `FIREBASE_SERVICE_ACCOUNT` (the project's service account key, JSON) and `VAPID_PRIVATE_KEY`
 (private half of the key whose public half is `VAPID_PUBLIC` in `index.html`).
 
-Planned: identify a plant from a photo (#5).
+- **Identify from a photo** (Pl@ntNet, free, 500 a day): pick the match; plants not in the care guide get a basic routine (leafy, succulent, humidity lover) that can be changed. Needs a free key from my.plantnet.org in `PLANTNET_KEY`.
