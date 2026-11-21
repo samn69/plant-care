@@ -11,6 +11,15 @@ routine that changes with the seasons. Open it in Safari and choose
 - **Learns**: "Still wet" or watering early adjusts that plant's schedule.
 
 - **Location & weather**: your city from the phone (or typed in) sets the seasons; the local forecast warns about frost, hot days and grey spells.
+- **Shared homes**: sign in with Google, create a home and invite people by their Gmail address;
+  everyone in it sees the same plants and who watered them. Friends make their own homes.
 
-Data stays on the phone for now (backup file in Settings). Planned:
-sign-in and shared homes (#3), notifications and calendar (#4), identify a plant from a photo (#5).
+Without signing in, data stays on the phone (backup file in Settings).
+
+## Setup for sharing (once)
+Firebase project with Google sign-in and Firestore; `samn69.github.io` as an authorized domain;
+the rules in [`firestore.rules`](firestore.rules) published; the web config pasted into
+`FIREBASE_CONFIG` in `index.html`.
+
+Planned:
+notifications and calendar (#4), identify a plant from a photo (#5).

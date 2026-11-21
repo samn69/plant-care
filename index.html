@@ -156,6 +156,11 @@
     <div class="pagebody" id="locBody"></div>
   </div>
 
+  <div class="page" id="homePage">
+    <div class="pagehead"><button class="back" data-close="homePage">‹ Back</button><h1 id="homeTitle">Home</h1></div>
+    <div class="pagebody" id="homeBody"></div>
+  </div>
+
   <div class="toast" id="toast"><span id="toastText"></span><button id="toastUndo">Undo</button></div>
 
   <input type="file" id="photoInput" accept="image/*" class="hidden">
@@ -280,6 +285,7 @@ function load() {
   return blank();
 }
 function save() {
+  if (cloudActive()) { try { persistSettings(); } catch (e) {} syncToCloud(); return true; }
   try { localStorage.setItem(KEY, JSON.stringify(D)); return true; }
   catch (e) { toast('Phone storage is full: the last change was not saved.'); return false; }
 }
@@ -342,6 +348,7 @@ function waterInfo(p, at) {
   if (Math.abs(learned - 1) >= 0.04) { f *= learned; why.push(learned > 1 ? 'learned: its soil stays wet longer' : 'learned: its soil dries sooner'); }
   return { season, base, days: Math.max(2, Math.round(base * f)), why };
 }
+function lastBy(p, t) { const at = lastOf(p, t); const e = at && p.log.find(x => x.t === t && x.at === at); return e && e.by ? e.by : ''; }
 function lastOf(p, t) {
   let best = null;
   for (const e of p.log) if (e.t === t && (!best || e.at > best)) best = e.at;
@@ -442,7 +449,7 @@ function act(p, kind) {
     if (!w.never && w.due >= 2) p.factor = Math.max(0.6, (p.factor || 1) * 0.93);
     p.snooze = null;
   }
-  p.log.push({ t: kind, at });
+  p.log.push(cloudActive() ? { t: kind, at, by: myName() } : { t: kind, at });
   if (p.log.length > 300) p.log = p.log.slice(-300);
   save(); render();
   const verb = { water: 'Watered', feed: 'Fed', mist: 'Misted' }[kind];
@@ -464,7 +471,8 @@ function toast(text, before) {
 }
 document.getElementById('toastUndo').onclick = () => {
   if (!undoState) return;
-  D = JSON.parse(undoState); undoState = null; save(); render();
+  // undo brings back plants and climate only, never settings (e.g. which home is shown)
+  const old = JSON.parse(undoState); D.plants = old.plants; D.climate = old.climate; undoState = null; save(); render();
   if (openPlantId) renderPlantPage();
   document.getElementById('toast').classList.remove('show');
 };
@@ -488,7 +496,7 @@ function render() {
   document.getElementById('title').textContent = { today: 'Today', plants: 'My Plants', settings: 'Settings' }[tab];
   document.getElementById('subtitle').textContent = tab === 'today'
     ? now().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + SEASON_ICON[season] + ' ' + cap(season)
-    : tab === 'plants' ? D.plants.length + (D.plants.length === 1 ? ' plant' : ' plants') : '';
+    : tab === 'plants' ? (cloud.home ? '🏠 ' + cloud.home.name + ' · ' : '') + D.plants.length + (D.plants.length === 1 ? ' plant' : ' plants') : '';
   const n = todoItems().length; const badge = document.getElementById('todayBadge');
   badge.textContent = n; badge.classList.toggle('hidden', !n);
   if (tab === 'today') renderToday(); else if (tab === 'plants') renderPlants(); else renderSettings();
@@ -496,8 +504,12 @@ function render() {
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // ---------- Today ----------
+function loadingCard() {
+  return '<div class="card empty"><div class="big">🏠</div>Loading your home…' + (cloud.slow ? '<p class="muted" style="margin:8px 0">This is taking long: check the connection.</p><button class="btn" data-reload>Try again</button>' : '') + '</div>';
+}
 function renderToday() {
   const el = document.getElementById('tab-today');
+  if (homePending()) { el.innerHTML = loadingCard(); return; }
   if (!D.plants.length) {
     el.innerHTML = '<div class="card empty"><div class="big">🪴</div><p>No plants yet.</p><p class="muted">Add your plants and the app works out when each one needs water, food and care, season by season.</p><br><button class="btn primary" data-add>Add a plant</button></div>';
     return;
@@ -557,6 +569,7 @@ function saveClimate() {
 // ---------- Plants ----------
 function renderPlants() {
   const el = document.getElementById('tab-plants');
+  if (homePending()) { el.innerHTML = loadingCard(); return; }
   let html = '<button class="btn primary wide" data-add style="margin-bottom:12px">＋ Add a plant</button>';
   if (!D.plants.length) { el.innerHTML = html + '<div class="card empty"><div class="big">🪴</div>No plants yet.</div>'; return; }
   const groups = {};
@@ -625,7 +638,7 @@ function renderPlantPage() {
   html += '<div class="card"><h2>' + SEASON_ICON[season] + ' ' + cap(season) + ' care</h2>';
   html += '<div class="kv"><span class="k">💧 Water</span><span class="v"><b>' + every(w.days) + '</b><br><span class="muted">when ' + esc(s.check) + '</span></span></div>';
   if (w.why.length) html += '<div class="kv"><span class="k">Adjusted for</span><span class="v muted">' + esc(w.why.join(' · ')) + '<br>(standard: ' + every(w.base) + ')</span></div>';
-  html += '<div class="kv"><span class="k">Last watered</span><span class="v">' + (w.last ? ago(w.last) + ' (' + fmtDate(w.last) + ')' : 'not logged yet') + '</span></div>';
+  html += '<div class="kv"><span class="k">Last watered</span><span class="v">' + (w.last ? ago(w.last) + ' (' + fmtDate(w.last) + ')' + (lastBy(p, 'water') ? '<br><span class="muted">by ' + esc(lastBy(p, 'water')) + '</span>' : '') : 'not logged yet') + '</span></div>';
   html += '<div class="kv"><span class="k">Next water</span><span class="v">' + (w.never ? 'today, then on schedule' : w.due < 0 ? '<span class="tag late">' + (-w.due) + ' days late</span>' : inDays(w.due) + ' (' + fmtDate(w.next) + ')') + '</span></div>';
   html += '<div class="kv"><span class="k">🧪 Feed</span><span class="v">' + (f.days ? every(f.days) + '<br><span class="muted">next ' + (f.due <= 0 ? 'today' : inDays(f.due)) + '</span>' : 'no fertilizer this season') + '</span></div>';
   html += '<div class="muted" style="margin-top:8px">' + esc(s.tips[season]) + '</div>';
@@ -656,7 +669,7 @@ function renderPlantPage() {
   html += '<div class="card"><h2>History</h2>';
   const log = p.log.slice().sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
   if (!log.length) html += '<div class="muted">Nothing logged yet.</div>';
-  for (const e of log) html += '<div class="kv"><span>' + { water: '💧 Watered', feed: '🧪 Fed', mist: '💦 Misted' }[e.t] + '</span><span class="v muted">' + fmtDate(e.at) + ' · ' + ago(e.at) + ' <button class="linkbtn" data-unlog="' + esc(e.at) + '" data-t="' + e.t + '">Remove</button></span></div>';
+  for (const e of log) html += '<div class="kv"><span>' + { water: '💧 Watered', feed: '🧪 Fed', mist: '💦 Misted' }[e.t] + '</span><span class="v muted">' + (e.by ? esc(e.by) + ' · ' : '') + fmtDate(e.at) + ' · ' + ago(e.at) + ' <button class="linkbtn" data-unlog="' + esc(e.at) + '" data-t="' + e.t + '">Remove</button></span></div>';
   html += '</div>';
 
   // Details
@@ -973,6 +986,263 @@ function weatherCard() {
   return html + '</div>';
 }
 
+// ---------- Sharing: sign-in and homes (Firebase) ----------
+// The web app config from the Firebase console. It is not a secret: firestore.rules protect the data.
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyC6VP9oQEUCT4J0bWXbfDb-KbOY_BCGjHU',
+  authDomain: 'plant-care-b46d8.firebaseapp.com',
+  projectId: 'plant-care-b46d8',
+  storageBucket: 'plant-care-b46d8.firebasestorage.app',
+  messagingSenderId: '483347582259',
+  appId: '1:483347582259:web:754965eaf1624294df4246'
+};
+const FB_VERSION = '10.14.1';
+const cloud = { user: null, authKnown: false, failed: false, homes: [], homesLoaded: false, invites: [], home: null, homeId: null, loading: false, synced: {}, climateJson: 'null', unsub: [], watch: [], db: null, auth: null, creating: false };
+function cloudActive() { return !!(cloud.user && cloud.homeId); }
+// A home chosen on this phone whose plants are not shown yet (still signing in or loading).
+function homePending() {
+  if (!FIREBASE_CONFIG || !D.settings.home || cloud.failed) return false;
+  return !cloud.authKnown || (cloud.homeId === D.settings.home && cloud.loading);
+}
+function myName() { const u = cloud.user; return u ? ((u.displayName || '').split(' ')[0] || (u.email || '').split('@')[0]) : ''; }
+function myEmail() { return cloud.user && cloud.user.email ? cloud.user.email.toLowerCase() : ''; }
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+async function initCloud() {
+  if (!FIREBASE_CONFIG) return;
+  try { if (!window.firebase) for (const m of ['app', 'auth', 'firestore']) await loadScript('https://www.gstatic.com/firebasejs/' + FB_VERSION + '/firebase-' + m + '-compat.js'); }
+  catch (e) { cloud.failed = true; render(); return; }
+  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+  cloud.auth = firebase.auth(); cloud.db = firebase.firestore();
+  // offline copy: must be switched on before first use, but sign-in must not wait for it (it can be slow to start)
+  try { cloud.db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
+  cloud.auth.getRedirectResult().catch(e => toast(authError(e)));
+  cloud.auth.onAuthStateChanged(onUser);
+  setTimeout(() => { if (!cloud.authKnown) { cloud.slow = true; render(); } }, 15000);
+}
+function authError(e) {
+  if (e.code === 'auth/unauthorized-domain') return 'Sign-in is not allowed on this address yet (Firebase → Authentication → Settings → Authorized domains).';
+  if (e.code === 'auth/network-request-failed') return 'No connection: try again when you are online.';
+  return 'Sign-in failed: ' + (e.message || e.code);
+}
+async function signIn() {
+  const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+  try { await cloud.auth.signInWithPopup(p); }
+  catch (e) {
+    if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment'].includes(e.code)) return cloud.auth.signInWithRedirect(p);
+    if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') toast(authError(e));
+  }
+}
+async function signOut() { leaveCloudMode(); await cloud.auth.signOut(); toast('Signed out: showing the plants on this phone'); }
+function stop(list) { while (list.length) { try { list.pop()(); } catch (e) {} } }
+function onUser(u) {
+  cloud.authKnown = true; cloud.user = u; stop(cloud.watch); cloud.homes = []; cloud.invites = []; cloud.homesLoaded = false;
+  if (!u) { if (cloud.homeId) leaveCloudMode(); render(); return; }
+  // the home shown on this phone belongs to whoever chose it; someone else signing in starts with their own list
+  if (D.settings.home && D.settings.homeUser && D.settings.homeUser !== u.uid) { D.settings.home = null; persistSettings(); }
+  if (D.settings.home && !cloud.homeId) enterHome(D.settings.home);
+  cloud.watch.push(cloud.db.collection('homes').where('members', 'array-contains', u.uid).onSnapshot(s => {
+    cloud.homes = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => a.name.localeCompare(b.name));
+    const fromServer = !(s.metadata && s.metadata.fromCache);
+    if (fromServer) cloud.homesLoaded = true;
+    // the chosen home is gone (removed from it, or deleted): back to this phone's plants
+    if (fromServer && D.settings.home && !cloud.homes.some(h => h.id === D.settings.home)) {
+      const was = cloud.homeId; D.settings.home = null; persistSettings(); leaveCloudMode();
+      if (was) toast('You are no longer in that home: showing the plants on this phone');
+    }
+    render(); if (document.getElementById('homePage').classList.contains('open')) renderHomePage();
+  }, () => {}));
+  if (myEmail()) cloud.watch.push(cloud.db.collection('homes').where('invites', 'array-contains', myEmail()).onSnapshot(s => {
+    cloud.invites = s.docs.map(d => Object.assign({ id: d.id }, d.data())); render();
+  }, () => {}));
+  render();
+}
+function norm(p) {
+  return { id: p.id, sp: p.sp, nick: p.nick || '', room: p.room || '', photo: p.photo || null, dir: p.dir == null ? null : p.dir,
+    dist: p.dist || 'near', factor: p.factor || 1, added: p.added || now().toISOString(), snooze: p.snooze || null,
+    log: (p.log || []).map(e => e.by ? { t: e.t, at: e.at, by: e.by } : { t: e.t, at: e.at })
+      .sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.t < b.t ? -1 : a.t > b.t ? 1 : 0) };
+}
+function enterHome(id) {
+  stop(cloud.unsub);
+  cloud.homeId = id; cloud.home = null; cloud.loading = true; cloud.synced = {}; cloud.climateJson = 'null';
+  D.settings.home = id; D.settings.homeUser = cloud.user.uid; persistSettings();
+  D.plants = []; D.climate = null; undoState = null;
+  const ref = cloud.db.collection('homes').doc(id);
+  cloud.unsub.push(ref.onSnapshot(s => {
+    if (!s.exists) return;
+    cloud.home = Object.assign({ id }, s.data()); D.climate = cloud.home.climate || null; cloud.climateJson = JSON.stringify(D.climate);
+    render(); if (openPlantId) renderPlantPage();
+    if (document.getElementById('homePage').classList.contains('open')) renderHomePage();
+  }, () => {}));
+  cloud.unsub.push(ref.collection('plants').onSnapshot(s => {
+    const plants = s.docs.map(d => norm(Object.assign({}, d.data(), { id: d.id }))).filter(p => LIB[p.sp]);
+    cloud.synced = {}; for (const p of plants) cloud.synced[p.id] = JSON.stringify(p);
+    D.plants = plants; cloud.loading = false;
+    render(); if (openPlantId) renderPlantPage();
+  }, () => { cloud.loading = false; render(); }));
+  render();
+}
+function leaveCloudMode() {
+  stop(cloud.unsub); cloud.homeId = null; cloud.home = null; cloud.loading = false; cloud.synced = {};
+  const local = load(); D.plants = local.plants; D.climate = local.climate; undoState = null;
+  if (openPlantId && !findPlant(openPlantId)) closePage('plantPage');
+  render();
+}
+// In a home, the phone keeps only its settings (and its own plants, untouched).
+function persistSettings() {
+  let local; try { local = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  if (!local || !Array.isArray(local.plants)) local = blank();
+  local.settings = D.settings; localStorage.setItem(KEY, JSON.stringify(local));
+}
+// Writes what changed since the last snapshot: new / deleted plants, changed fields, and
+// history entries added or removed one by one, so two phones logging at once never overwrite each other.
+function syncToCloud() {
+  const FV = firebase.firestore.FieldValue;
+  const homeRef = cloud.db.collection('homes').doc(cloud.homeId); const col = homeRef.collection('plants');
+  const batch = cloud.db.batch(); let n = 0;
+  const same = (a, b) => a.t === b.t && a.at === b.at && (a.by || '') === (b.by || '');
+  const seen = {};
+  for (const raw of D.plants) {
+    const p = norm(raw); const j = JSON.stringify(p); seen[p.id] = 1;
+    if (cloud.synced[p.id] === j) continue;
+    const ref = col.doc(p.id); const prev = cloud.synced[p.id] ? JSON.parse(cloud.synced[p.id]) : null;
+    const data = Object.assign({}, p); delete data.id;
+    if (!prev) { batch.set(ref, data); n++; }
+    else {
+      const changes = {};
+      for (const k of Object.keys(data)) if (k !== 'log' && JSON.stringify(data[k]) !== JSON.stringify(prev[k])) changes[k] = data[k];
+      if (Object.keys(changes).length) { batch.update(ref, changes); n++; }
+      const added = p.log.filter(e => !prev.log.some(x => same(x, e)));
+      const removed = prev.log.filter(e => !p.log.some(x => same(x, e)));
+      if (added.length) { batch.update(ref, { log: FV.arrayUnion(...added) }); n++; }
+      if (removed.length) { batch.update(ref, { log: FV.arrayRemove(...removed) }); n++; }
+    }
+    cloud.synced[p.id] = j;
+  }
+  for (const id of Object.keys(cloud.synced)) if (!seen[id]) { batch.delete(col.doc(id)); delete cloud.synced[id]; n++; }
+  const cj = JSON.stringify(D.climate || null);
+  if (cj !== cloud.climateJson) { batch.update(homeRef, { climate: D.climate || null }); cloud.climateJson = cj; n++; }
+  if (n) batch.commit().catch(e => toast('Could not save to your home: ' + (e.code === 'permission-denied' ? 'you are no longer a member.' : 'it will retry when online.')));
+}
+function localPlantCount() { try { const l = JSON.parse(localStorage.getItem(KEY)); return l && Array.isArray(l.plants) ? l.plants.length : 0; } catch (e) { return 0; } }
+async function createHome(name, move) {
+  if (cloud.creating) return; cloud.creating = true;
+  try {
+    const u = cloud.user; const ref = cloud.db.collection('homes').doc();
+    const local = load();
+    await ref.set({ name, owner: u.uid, members: [u.uid], invites: [], names: { [u.uid]: { name: myName(), email: myEmail() } },
+      climate: move && local.climate ? local.climate : null, created: now().toISOString() });
+    enterHome(ref.id);
+    if (move && local.plants.length) await moveLocalPlants();
+    toast('Home “' + name + '” created');
+  } catch (e) { toast('The home could not be created: ' + (e.code === 'permission-denied' ? 'check the Firestore rules.' : 'no connection?')); }
+  finally { cloud.creating = false; render(); }
+}
+async function moveLocalPlants() {
+  const local = load(); if (!local.plants.length || !cloud.homeId) return;
+  const col = cloud.db.collection('homes').doc(cloud.homeId).collection('plants'); const batch = cloud.db.batch();
+  for (const p of local.plants) { const d = norm(p); delete d.id; batch.set(col.doc(p.id), d); }
+  await batch.commit();
+  const moved = local.plants.length;
+  local.plants = []; local.climate = null; local.settings = D.settings; localStorage.setItem(KEY, JSON.stringify(local));
+  if (document.getElementById('homePage').classList.contains('open')) renderHomePage();
+  toast('Moved ' + moved + ' plants into ' + ((cloud.home && cloud.home.name) || 'the home'));
+}
+function useHome(id) {
+  if (id) { if (id !== cloud.homeId) enterHome(id); }
+  else { D.settings.home = null; persistSettings(); leaveCloudMode(); }
+  closePage('plantPage'); render();
+}
+async function homeUpdate(id, change, okText) {
+  try { await cloud.db.collection('homes').doc(id).update(change); if (okText) toast(okText); return true; }
+  catch (e) { toast(e.code === 'permission-denied' ? 'Not allowed: only the person who created the home can do that.' : 'No connection: try again when you are online.'); return false; }
+}
+function joinHome(h) {
+  const FV = firebase.firestore.FieldValue; const u = cloud.user;
+  homeUpdate(h.id, { members: FV.arrayUnion(u.uid), invites: FV.arrayRemove(myEmail()), ['names.' + u.uid]: { name: myName(), email: myEmail() } }, 'Welcome to “' + h.name + '”')
+    .then(ok => { if (ok) enterHome(h.id); });
+}
+function declineHome(h) { homeUpdate(h.id, { invites: firebase.firestore.FieldValue.arrayRemove(myEmail()) }, 'Invitation declined'); }
+function inviteEmail() {
+  const inp = document.getElementById('inviteEmail'); const email = inp.value.trim().toLowerCase(); const h = cloud.home;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Please type a full email address.'); return; }
+  if ((h.invites || []).includes(email) || Object.values(h.names || {}).some(n => n.email === email)) { toast(email + ' is already in this home or invited.'); return; }
+  homeUpdate(h.id, { invites: firebase.firestore.FieldValue.arrayUnion(email) }, 'Invited ' + email).then(ok => { if (ok) inp.value = ''; });
+}
+async function deleteHome() {
+  const id = cloud.homeId; const ref = cloud.db.collection('homes').doc(id);
+  try {
+    const plants = await ref.collection('plants').get(); const batch = cloud.db.batch();
+    plants.docs.forEach(d => batch.delete(d.ref)); await batch.commit(); await ref.delete();
+    D.settings.home = null; persistSettings(); leaveCloudMode(); closePage('homePage'); toast('Home deleted');
+  } catch (e) { toast('The home could not be deleted: no connection?'); }
+}
+async function shareAppLink() {
+  const url = location.origin + location.pathname;
+  const text = 'Our plants are in Plant Care: open this link, then Settings → Sign in with Google → Join.';
+  try { if (navigator.share) { await navigator.share({ title: 'Plant Care', text, url }); return; } } catch (e) { return; }
+  try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch (e) { toast(url); }
+}
+function sharingCard() {
+  let html = '<div class="card"><h2>Home & sharing</h2>';
+  if (!FIREBASE_CONFIG) return html + '<div class="muted">Sharing with your family is being set up.</div></div>';
+  if (cloud.failed) return html + '<div class="muted">Sharing could not load (no connection?). The plants on this phone still work.</div></div>';
+  if (!cloud.authKnown) return html + (cloud.slow ? '<div class="muted" style="margin-bottom:8px">Sign-in is taking long: check the connection.</div><button class="btn wide" data-reload>Try again</button></div>' : '<div class="muted">Loading…</div></div>');
+  if (!cloud.user) return html + '<div class="muted" style="margin-bottom:10px">Share your plants with your family: everyone sees the same plants, what is due, and who watered them.</div><button class="btn primary wide" data-signin>Sign in with Google</button></div>';
+  html += '<div class="row" style="margin-bottom:6px"><div class="grow"><b>' + esc(cloud.user.displayName || myName()) + '</b><div class="muted">' + esc(myEmail()) + '</div></div><button class="btn small" data-signout>Sign out</button></div>';
+  for (const h of cloud.invites) {
+    const from = h.names && h.names[h.owner] ? h.names[h.owner].name : 'Someone';
+    html += '<div class="note season" style="margin-top:8px">📩 <b>' + esc(from) + '</b> invited you to <b>' + esc(h.name) + '</b>.<div class="actions" style="margin-top:8px"><button class="btn small" data-declinehome="' + h.id + '">No thanks</button><button class="btn small primary" data-joinhome="' + h.id + '">Join</button></div></div>';
+  }
+  html += '<div class="muted" style="margin:10px 0 4px">Show the plants of</div>';
+  for (const h of cloud.homes) html += '<div class="item" data-usehome="' + h.id + '" style="cursor:pointer"><div class="grow"><div class="name">🏠 ' + esc(h.name) + '</div><div class="muted">' + h.members.length + (h.members.length === 1 ? ' person' : ' people') + (h.owner === cloud.user.uid ? ' · yours' : '') + '</div></div>' + (h.id === cloud.homeId ? '<span class="tag ok">✓ shown</span>' : '') + '</div>';
+  html += '<div class="item" data-usehome="" style="cursor:pointer"><div class="grow"><div class="name">📱 This phone only</div><div class="muted">' + localPlantCount() + ' plants, not shared</div></div>' + (!cloud.homeId ? '<span class="tag ok">✓ shown</span>' : '') + '</div>';
+  if (cloud.homeId && cloud.home) html += '<button class="btn wide" style="margin-top:10px" data-managehome>Manage “' + esc(cloud.home.name) + '”: people & invitations</button>';
+  const n = localPlantCount();
+  html += '<button class="btn wide" style="margin-top:8px" data-newhome>＋ Create a home</button>' +
+    '<div id="newHomeForm" class="hidden" style="margin-top:10px"><div class="field"><label>Name</label><input id="newHomeName" value="' + esc(cloud.homes.length ? '' : 'Our home') + '" placeholder="e.g. Our home"></div>' +
+    (n ? '<label class="row" style="margin-bottom:10px;font-size:14px"><input type="checkbox" id="newHomeMove" checked style="width:auto"> Move the ' + n + ' plants on this phone into it</label>' : '') +
+    '<button class="btn primary wide" data-createhome' + (cloud.creating ? ' disabled' : '') + '>Create</button></div>';
+  return html + '</div>';
+}
+function openHomePage() { renderHomePage(); openPage('homePage'); }
+function renderHomePage() {
+  const h = cloud.home; const body = document.getElementById('homeBody');
+  if (!h) { closePage('homePage'); return; }
+  const mine = h.owner === cloud.user.uid;
+  const typing = document.getElementById('inviteEmail'); const typed = typing ? typing.value : '';
+  document.getElementById('homeTitle').textContent = h.name;
+  let html = '<div class="card"><h2>People</h2>';
+  for (const id of h.members) {
+    const n = (h.names || {})[id] || { name: 'Someone', email: '' };
+    html += '<div class="item"><div class="thumb" style="font-size:20px">' + esc((n.name || '?').charAt(0).toUpperCase()) + '</div><div class="grow"><div class="name">' + esc(n.name) + (id === cloud.user.uid ? ' (you)' : '') + (id === h.owner ? ' <span class="tag info">created it</span>' : '') + '</div><div class="muted">' + esc(n.email) + '</div></div>' +
+      (mine && id !== h.owner ? '<button class="btn small danger" data-removemember="' + id + '">Remove</button>' : '') + '</div>';
+  }
+  html += '</div>';
+  if (mine) {
+    html += '<div class="card"><h2>Invite someone</h2><div class="muted" style="margin-bottom:8px">Type their Google (Gmail) address. Then send them the app link: they sign in with that address in Settings and tap Join.</div>' +
+      '<div class="row"><input id="inviteEmail" class="grow" type="email" autocomplete="off" autocapitalize="off" placeholder="name@gmail.com" value="' + esc(typed) + '"><button class="btn primary" data-invite>Invite</button></div>' +
+      '<button class="btn wide" style="margin-top:8px" data-sharelink>Send the app link</button>';
+    if ((h.invites || []).length) {
+      html += '<div class="muted" style="margin:12px 0 2px">Waiting to join</div>';
+      for (const e of h.invites) html += '<div class="kv"><span>' + esc(e) + '</span><button class="linkbtn" data-uninvite="' + esc(e) + '">Cancel</button></div>';
+    }
+    html += '</div>';
+    html += '<div class="card"><h2>Name</h2><div class="row"><input id="homeName" class="grow" value="' + esc(h.name) + '"><button class="btn" data-renamehome>Save</button></div></div>';
+  } else {
+    html += '<div class="note season">Only ' + esc(((h.names || {})[h.owner] || {}).name || 'the person who created it') + ' can invite people to this home.</div>';
+  }
+  const n = localPlantCount();
+  if (n) html += '<div class="card"><h2>Plants on this phone</h2><div class="muted" style="margin-bottom:8px">' + n + ' plants are saved only on this phone.</div><button class="btn wide" data-movelocal>Move them into “' + esc(h.name) + '”</button></div>';
+  html += mine ? '<button class="btn danger wide" style="background:none" data-deletehome>Delete this home</button>' : '<button class="btn danger wide" style="background:none" data-leavehome>Leave this home</button>';
+  body.innerHTML = html;
+}
+function armed(t, label, fn) {
+  if (t.dataset.armed) return fn();
+  t.dataset.armed = '1'; const old = t.textContent; t.textContent = label;
+  setTimeout(() => { if (t.isConnected) { delete t.dataset.armed; t.textContent = old; } }, 3000);
+}
+
 // ---------- Settings ----------
 function renderSettings() {
   const el = document.getElementById('tab-settings');
@@ -981,8 +1251,9 @@ function renderSettings() {
     (l ? '<div style="font-weight:600">📍 ' + esc(locLabel(l)) + '</div><div class="muted">' + (l.source === 'gps' ? 'From your phone, checked daily' : 'Typed in') + ' · ' + (hemi() === 'N' ? 'winter is Dec–Feb' : 'winter is Jun–Aug') + '</div>'
        : '<div class="muted">Not set: seasons follow the northern hemisphere.</div>') +
     '</div><button class="btn small" data-setloc>' + (l ? 'Change' : 'Set') + '</button></div></div>';
+  html += sharingCard();
   html += climateCard();
-  html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">Your plants are saved on this phone. Save a backup file now and then (sharing with your home comes in a later update).</div>' +
+  html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">' + (cloudActive() ? 'Your home is saved online. A backup file of its plants is still handy now and then.' : 'Your plants are saved on this phone. Save a backup file now and then.') + '</div>' +
     '<div class="row"><button class="btn grow" data-export>Save backup</button><button class="btn grow" data-import>Restore backup</button></div><input type="file" id="importInput" accept="application/json,.json" class="hidden"></div>';
   html += '<div class="card"><h2>About</h2><div class="muted">Plant Care · care advice is general guidance: always check the soil with a finger before watering.</div></div>';
   el.innerHTML = html;
@@ -1001,7 +1272,7 @@ function importBackup(e) {
     try {
       const d = JSON.parse(r.result);
       if (!d || !Array.isArray(d.plants) || d.plants.some(p => !LIB[p.sp])) throw new Error('bad');
-      const before = snapshot(); D = Object.assign(blank(), d); save(); render();
+      const before = snapshot(); D.plants = d.plants; D.climate = d.climate || null; save(); render();
       toast('Backup restored: ' + D.plants.length + ' plants', before);
     } catch (err) { toast('That file is not a Plant Care backup.'); }
   };
@@ -1010,7 +1281,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -1049,6 +1320,30 @@ document.addEventListener('click', e => {
   if ('citysearch' in d) return searchCity();
   if (d.cityi) { const c = citySearch.results[+d.cityi]; setLocation({ lat: round2(c.latitude), lon: round2(c.longitude), name: c.name, country: c.country || '', source: 'search' }); closePage('locPage'); toast('Location: ' + c.name); return; }
   if ('loclater' in d) { D.settings.locAsked = true; save(); closePage('locPage'); return; }
+  if ('reload' in d) return location.reload();
+  if ('signin' in d) return signIn();
+  if ('signout' in d) return signOut();
+  if (d.joinhome) return joinHome(cloud.invites.find(h => h.id === d.joinhome));
+  if (d.declinehome) return declineHome(cloud.invites.find(h => h.id === d.declinehome));
+  if ('usehome' in d) return useHome(d.usehome);
+  if ('managehome' in d) return openHomePage();
+  if ('newhome' in d) { const f = document.getElementById('newHomeForm'); f.classList.toggle('hidden'); if (!f.classList.contains('hidden')) document.getElementById('newHomeName').focus(); return; }
+  if ('createhome' in d) {
+    const name = document.getElementById('newHomeName').value.trim(); if (!name) { toast('Please give the home a name.'); return; }
+    const mv = document.getElementById('newHomeMove'); return createHome(name, !!(mv && mv.checked));
+  }
+  if ('invite' in d) return inviteEmail();
+  if (d.uninvite) return homeUpdate(cloud.homeId, { invites: firebase.firestore.FieldValue.arrayRemove(d.uninvite) }, 'Invitation cancelled');
+  if ('sharelink' in d) return shareAppLink();
+  if ('renamehome' in d) { const n = document.getElementById('homeName').value.trim(); if (n) homeUpdate(cloud.homeId, { name: n }, 'Renamed'); return; }
+  if ('movelocal' in d) return moveLocalPlants().catch(() => toast('Could not move the plants: no connection?'));
+  if (d.removemember) return armed(t, 'Tap again to remove', () => homeUpdate(cloud.homeId, { members: firebase.firestore.FieldValue.arrayRemove(d.removemember), ['names.' + d.removemember]: firebase.firestore.FieldValue.delete() }, 'Removed from the home'));
+  if ('leavehome' in d) return armed(t, 'Tap again to leave', () => {
+    const id = cloud.homeId; const uidMe = cloud.user.uid;
+    homeUpdate(id, { members: firebase.firestore.FieldValue.arrayRemove(uidMe), ['names.' + uidMe]: firebase.firestore.FieldValue.delete() }, 'You left the home')
+      .then(ok => { if (ok) { D.settings.home = null; persistSettings(); leaveCloudMode(); closePage('homePage'); } });
+  });
+  if ('deletehome' in d) return armed(t, 'Tap again: deletes all its plants for everyone', deleteHome);
   if ('export' in d) return exportBackup();
   if ('import' in d) return document.getElementById('importInput').click();
 });
@@ -1056,7 +1351,7 @@ document.addEventListener('click', e => {
 render();
 // First start: ask where the plants are (a page, not a pop-up); Later skips it.
 if (!loc() && !D.settings.locAsked) openLocPage();
-refreshWeather(); recheckLocation();
+refreshWeather(); recheckLocation(); initCloud();
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 // The date changes while the app stays open (e.g. overnight): refresh when it comes back.
 let lastDay = today().getTime();
