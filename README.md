@@ -14,6 +14,9 @@ routine that changes with the seasons. Open it in Safari and choose
 - **Shared homes**: sign in with Google, create a home and invite people by their Gmail address;
   everyone in it sees the same plants and who watered them. Friends make their own homes.
 
+- **Reminders**: a daily notification at your chosen time, only on days something is due
+  (sent by a scheduled GitHub job), and the next 8 weeks of watering and feeding days for your calendar.
+
 Without signing in, data stays on the phone (backup file in Settings).
 
 ## Setup for sharing (once)
@@ -21,5 +24,8 @@ Firebase project with Google sign-in and Firestore; `samn69.github.io` as an aut
 the rules in [`firestore.rules`](firestore.rules) published; the web config pasted into
 `FIREBASE_CONFIG` in `index.html`.
 
-Planned:
-notifications and calendar (#4), identify a plant from a photo (#5).
+Reminders also need two repository secrets for `.github/workflows/reminders.yml`:
+`FIREBASE_SERVICE_ACCOUNT` (the project's service account key, JSON) and `VAPID_PRIVATE_KEY`
+(private half of the key whose public half is `VAPID_PUBLIC` in `index.html`).
+
+Planned: identify a plant from a photo (#5).

@@ -13,6 +13,11 @@ service cloud.firestore {
       return !('names' in changed()) || request.resource.data.names.diff(resource.data.names).affectedKeys().hasOnly([uid()]);
     }
 
+    // each person's reminder settings and phones; only they can see them (the reminder job reads them as admin)
+    match /users/{userId} {
+      allow read, write: if signedIn() && uid() == userId;
+    }
+
     match /homes/{homeId} {
       allow read: if signedIn() && (uid() in resource.data.members || (verified() && email() in resource.data.invites));
 

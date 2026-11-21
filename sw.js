@@ -1,6 +1,6 @@
 // Keeps the app usable offline. The page is fetched fresh when online (falls back to the
 // saved copy after 3 s or with no signal).
-const CACHE = 'plant-care-v4';
+const CACHE = 'plant-care-v5';
 // Firebase (sign-in and shared homes) is versioned, so it is served from the cache once saved.
 const LIBS = ['app', 'auth', 'firestore'].map(m => 'https://www.gstatic.com/firebasejs/10.14.1/firebase-' + m + '-compat.js');
 const FILES = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png', './icon-192.png', './icon-512.png'];
@@ -34,4 +34,20 @@ self.addEventListener('fetch', event => {
   if (LIBS.includes(event.request.url)) { event.respondWith(libFromCache(event.request)); return; }
   if (event.request.method !== 'GET' || url.origin !== location.origin) return;
   event.respondWith(networkFirst(event.request));
+});
+
+// Reminders sent by the scheduled job (scripts/send-reminders.js).
+self.addEventListener('push', event => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data && event.data.text() }; }
+  event.waitUntil(self.registration.showNotification(d.title || '🌿 Plant Care', {
+    body: d.body || 'Your plants need you today.', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag || 'plants', data: { url: d.url || './' }
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const c of list) if ('focus' in c) return c.focus();
+    return self.clients.openWindow((event.notification.data && event.notification.data.url) || './');
+  }));
 });
