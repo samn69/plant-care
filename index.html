@@ -1275,7 +1275,7 @@ function armed(t, label, fn) {
 
 // ---------- Reminders: notifications and calendar ----------
 // Public half of the key the reminder job signs notifications with (the private half is a GitHub secret).
-const VAPID_PUBLIC = 'BBbJ7jNCgZMfquOV3MhkI2PFwtvE_bZl9f55PUcbXBUtTPsOEfdHi_yaAPZBbCoOEVHeo4SULM94NfoUsAGUfcg';
+const VAPID_PUBLIC = 'BEA1ZxKSrqJegIl2Wi4S0aDf0EPT_-xkdd70zDuRdJBqLcpvublaJJqIC3z-U9ffdaSHrbeN9PvVW9qR_3dm-PM';
 const remind = { me: null };
 function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
 function isStandalone() { return navigator.standalone === true || !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches); }
@@ -1284,6 +1284,10 @@ function myTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone 
 function hm(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function userRef() { return cloud.db.collection('users').doc(cloud.user.uid); }
 function notifyTime() { return (remind.me && remind.me.notify && remind.me.notify.time) || '09:00'; }
+function sameKey(sub) {
+  const k = sub.options && sub.options.applicationServerKey; if (!k) return false;
+  const a = new Uint8Array(k), b = b64u(VAPID_PUBLIC); return a.length === b.length && a.every((x, i) => x === b[i]);
+}
 function b64u(s) { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); }
 // What the reminder job reads: the next dates per plant, worked out here with the full care logic.
 function computeDue(p) {
@@ -1307,7 +1311,10 @@ function enableNotifications() {
     if (perm !== 'granted') { render(); toast('Notifications are not allowed: iPhone Settings → Notifications → Plants → Allow.'); return; }
     try {
       const reg = await navigator.serviceWorker.ready;
-      const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
+      // a registration made with an older key can't receive from the job any more: replace it
+      let sub = await reg.pushManager.getSubscription();
+      if (sub && !sameKey(sub)) { await sub.unsubscribe(); sub = null; }
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
       const j = sub.toJSON(); const entry = { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, added: now().toISOString() };
       const FV = firebase.firestore.FieldValue; const time = notifyTime();
       const notify = { on: true, time, tz: myTz() };
@@ -1315,7 +1322,7 @@ function enableNotifications() {
       await userRef().set({ name: myName(), email: myEmail(), notify, subs: FV.arrayUnion(entry) }, { merge: true });
       const old = D.settings.pushSub;
       if (old && old.endpoint !== entry.endpoint) userRef().update({ subs: FV.arrayRemove(old) }).catch(() => {});
-      D.settings.pushSub = entry; persistSettings(); render();
+      D.settings.pushSub = entry; D.settings.pushKey = VAPID_PUBLIC; persistSettings(); render();
       toast('Notifications on: at ' + time + ' on days something is due');
     } catch (e) { toast('Notifications could not be turned on: ' + (e.message || e)); }
   });
@@ -1338,7 +1345,8 @@ function saveNotifyTime(t) {
 }
 function remindersCard() {
   let html = '<div class="card"><h2>Reminders</h2>';
-  const subOn = D.settings.pushSub && pushSupported() && Notification.permission === 'granted';
+  // on only when this phone registered with the current key (otherwise Turn on again)
+  const subOn = D.settings.pushSub && D.settings.pushKey === VAPID_PUBLIC && pushSupported() && Notification.permission === 'granted';
   html += '<div style="font-weight:600;margin-bottom:4px">🔔 Notifications</div>';
   if (!FIREBASE_CONFIG || !cloud.user || !cloud.homeId) html += '<div class="muted">Sign in and show a home (above) to get notifications: the reminder service reads what is due from your home.</div>';
   else if (isIOS() && !isStandalone()) html += '<div class="muted">Open Plant Care from its home-screen icon to turn on notifications: iPhone only allows them there.</div>';
