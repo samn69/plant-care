@@ -1063,7 +1063,8 @@ async function signOut() { leaveCloudMode(); await cloud.auth.signOut(); toast('
 function stop(list) { while (list.length) { try { list.pop()(); } catch (e) {} } }
 function onUser(u) {
   cloud.authKnown = true; cloud.user = u; stop(cloud.watch); cloud.homes = []; cloud.invites = []; cloud.homesLoaded = false;
-  if (!u) { if (cloud.homeId) leaveCloudMode(); render(); prepareGoogle(); return; }
+  if (!u) { if (cloud.homeId) leaveCloudMode(); remind.me = null; render(); prepareGoogle(); return; }
+  watchMe(u);
   // the home shown on this phone belongs to whoever chose it; someone else signing in starts with their own list
   if (D.settings.home && D.settings.homeUser && D.settings.homeUser !== u.uid) { D.settings.home = null; persistSettings(); }
   if (D.settings.home && !cloud.homeId) enterHome(D.settings.home);
@@ -1085,7 +1086,7 @@ function onUser(u) {
 }
 function norm(p) {
   return { id: p.id, sp: p.sp, nick: p.nick || '', room: p.room || '', photo: p.photo || null, dir: p.dir == null ? null : p.dir,
-    dist: p.dist || 'near', factor: p.factor || 1, added: p.added || now().toISOString(), snooze: p.snooze || null,
+    dist: p.dist || 'near', factor: p.factor || 1, added: p.added || now().toISOString(), snooze: p.snooze || null, due: p.due || null,
     log: (p.log || []).map(e => e.by ? { t: e.t, at: e.at, by: e.by } : { t: e.t, at: e.at })
       .sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.t < b.t ? -1 : a.t > b.t ? 1 : 0) };
 }
@@ -1106,6 +1107,7 @@ function enterHome(id) {
     cloud.synced = {}; for (const p of plants) cloud.synced[p.id] = JSON.stringify(p);
     D.plants = plants; cloud.loading = false;
     render(); if (openPlantId) renderPlantPage();
+    refreshDue();
   }, () => { cloud.loading = false; render(); }));
   render();
 }
@@ -1127,6 +1129,7 @@ function syncToCloud() {
   const FV = firebase.firestore.FieldValue;
   const homeRef = cloud.db.collection('homes').doc(cloud.homeId); const col = homeRef.collection('plants');
   const batch = cloud.db.batch(); let n = 0;
+  for (const p of D.plants) p.due = computeDue(p);
   const same = (a, b) => a.t === b.t && a.at === b.at && (a.by || '') === (b.by || '');
   const seen = {};
   for (const raw of D.plants) {
@@ -1270,6 +1273,122 @@ function armed(t, label, fn) {
   setTimeout(() => { if (t.isConnected) { delete t.dataset.armed; t.textContent = old; } }, 3000);
 }
 
+// ---------- Reminders: notifications and calendar ----------
+// Public half of the key the reminder job signs notifications with (the private half is a GitHub secret).
+const VAPID_PUBLIC = 'BBbJ7jNCgZMfquOV3MhkI2PFwtvE_bZl9f55PUcbXBUtTPsOEfdHi_yaAPZBbCoOEVHeo4SULM94NfoUsAGUfcg';
+const remind = { me: null };
+function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+function isStandalone() { return navigator.standalone === true || !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches); }
+function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+function myTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin'; } catch (e) { return 'Europe/Berlin'; } }
+function hm(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function userRef() { return cloud.db.collection('users').doc(cloud.user.uid); }
+function notifyTime() { return (remind.me && remind.me.notify && remind.me.notify.time) || '09:00'; }
+function b64u(s) { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+// What the reminder job reads: the next dates per plant, worked out here with the full care logic.
+function computeDue(p) {
+  const w = waterStatus(p); const f = feedStatus(p);
+  return { water: isoDay(w.next), feed: f.days ? isoDay(f.next) : null, mist: needsMist(p), name: plantName(p) };
+}
+function refreshDue() {
+  if (!cloudActive() || cloud.loading) return;
+  let changed = false;
+  for (const p of D.plants) { const d = computeDue(p); if (JSON.stringify(d) !== JSON.stringify(p.due || null)) { p.due = d; changed = true; } }
+  if (changed) syncToCloud();
+}
+function watchMe(u) {
+  remind.me = null; if (!u) return;
+  cloud.watch.push(userRef().onSnapshot(s => { remind.me = s.exists ? s.data() : {}; if (tab === 'settings') render(); }, () => {}));
+}
+function enableNotifications() {
+  if (!pushSupported()) { toast('Notifications are not available here.'); return; }
+  // asked straight from the tap: iPhone only shows the question then
+  Notification.requestPermission().then(async perm => {
+    if (perm !== 'granted') { render(); toast('Notifications are not allowed: iPhone Settings → Notifications → Plants → Allow.'); return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID_PUBLIC) });
+      const j = sub.toJSON(); const entry = { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, added: now().toISOString() };
+      const FV = firebase.firestore.FieldValue; const time = notifyTime();
+      const notify = { on: true, time, tz: myTz() };
+      if (hm(now()) >= time) notify.lastSent = isoDay(today()); // today's time has passed: the first reminder comes tomorrow
+      await userRef().set({ name: myName(), email: myEmail(), notify, subs: FV.arrayUnion(entry) }, { merge: true });
+      const old = D.settings.pushSub;
+      if (old && old.endpoint !== entry.endpoint) userRef().update({ subs: FV.arrayRemove(old) }).catch(() => {});
+      D.settings.pushSub = entry; persistSettings(); render();
+      toast('Notifications on: at ' + time + ' on days something is due');
+    } catch (e) { toast('Notifications could not be turned on: ' + (e.message || e)); }
+  });
+}
+async function disableNotifications() {
+  const old = D.settings.pushSub;
+  try {
+    if (old) await userRef().update({ subs: firebase.firestore.FieldValue.arrayRemove(old) });
+    const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe();
+  } catch (e) {}
+  D.settings.pushSub = null; persistSettings(); render(); toast('Notifications off on this phone');
+}
+async function testNotification() {
+  try { const reg = await navigator.serviceWorker.ready; await reg.showNotification('🌿 Plant Care', { body: 'This is how reminders look: 💧 Water: Monstera, Pilea', icon: 'icon-192.png', tag: 'test' }); }
+  catch (e) { toast('Could not show a notification: ' + (e.message || e)); }
+}
+function saveNotifyTime(t) {
+  if (!/^\d\d:\d\d$/.test(t)) return;
+  userRef().set({ notify: { time: t, tz: myTz() } }, { merge: true }).then(() => toast('Reminder time: ' + t)).catch(() => toast('No connection: try again when you are online.'));
+}
+function remindersCard() {
+  let html = '<div class="card"><h2>Reminders</h2>';
+  const subOn = D.settings.pushSub && pushSupported() && Notification.permission === 'granted';
+  html += '<div style="font-weight:600;margin-bottom:4px">🔔 Notifications</div>';
+  if (!FIREBASE_CONFIG || !cloud.user || !cloud.homeId) html += '<div class="muted">Sign in and show a home (above) to get notifications: the reminder service reads what is due from your home.</div>';
+  else if (isIOS() && !isStandalone()) html += '<div class="muted">Open Plant Care from its home-screen icon to turn on notifications: iPhone only allows them there.</div>';
+  else if (!pushSupported()) html += '<div class="muted">This browser cannot show notifications.</div>';
+  else if (Notification.permission === 'denied') html += '<div class="note warn">Notifications are blocked for this app: iPhone Settings → Notifications → Plants → Allow Notifications.</div>';
+  else if (subOn) html += '<div class="row"><div class="grow muted">On for this phone.</div><button class="btn small" data-notifytest>Test</button><button class="btn small" data-notifyoff>Turn off</button></div>';
+  else html += '<button class="btn primary wide" data-notifyon>Turn on notifications</button>';
+  if (cloud.user && cloud.homeId) html += '<div class="row" style="margin-top:10px"><label class="grow muted" for="notifyTime">Time of the daily reminder</label><input id="notifyTime" type="time" value="' + notifyTime() + '" style="width:auto"></div>' +
+    '<div class="muted" style="margin-top:6px">Once a day, only when a plant needs water, food or misting, and never for one someone already did. On every phone you turned it on.</div>';
+  html += '<div style="font-weight:600;margin:14px 0 4px">📅 Calendar</div><div class="muted" style="margin-bottom:8px">Adds the planned watering and feeding days for the next 8 weeks to your calendar. It is a plan: after watering early or late, add it again for new dates.</div>' +
+    '<button class="btn wide" data-calendar>Add the next 8 weeks to my calendar</button>';
+  return html + '</div>';
+}
+// ---- calendar (.ics) ----
+function planDays(weeks) {
+  const end = addDays(today(), weeks * 7); const days = {};
+  const add = (d, kind, name) => { const k = isoDay(d); (days[k] = days[k] || { water: [], feed: [] })[kind].push(name); };
+  for (const p of D.plants) {
+    const name = plantName(p); const w = waterStatus(p);
+    let d = w.next < today() ? today() : dayStart(w.next);
+    for (let i = 0; d <= end && i < 200; i++) { add(d, 'water', name); d = addDays(d, waterInfo(p, d).days); }
+    const f = feedStatus(p); let d2 = f.days ? (f.next < today() ? today() : dayStart(f.next)) : today();
+    for (let i = 0; d2 <= end && i < 200; i++) { const fd = sp(p).feed[seasonOf(d2)]; if (fd) { add(d2, 'feed', name); d2 = addDays(d2, fd); } else d2 = addDays(d2, 7); }
+  }
+  return days;
+}
+function icsText(s) { return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n'); }
+function icsFold(line) { const out = []; let cur = ''; for (const ch of line) { if (new TextEncoder().encode(cur + ch).length > 73) { out.push(cur); cur = ' ' + ch; } else cur += ch; } out.push(cur); return out.join('\r\n'); }
+function buildIcs(weeks) {
+  const days = planDays(weeks); const stamp = now().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const [hh, mm] = notifyTime().split(':').map(Number);
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Plant Care//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Plant Care'];
+  for (const k of Object.keys(days).sort()) {
+    const d = days[k]; const ymd = k.replace(/-/g, ''); const next = isoDay(addDays(new Date(k + 'T12:00:00'), 1)).replace(/-/g, '');
+    const parts = []; if (d.water.length) parts.push('💧 Water: ' + d.water.join(', ')); if (d.feed.length) parts.push('🧪 Feed: ' + d.feed.join(', '));
+    L.push('BEGIN:VEVENT', 'UID:' + ymd + '@plant-care', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + ymd, 'DTEND;VALUE=DATE:' + next,
+      'SUMMARY:' + icsText(parts.join(' · ')), 'DESCRIPTION:' + icsText('Check the soil with a finger first. Open Plant Care to tick it off.'),
+      'TRANSP:TRANSPARENT', 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsText(parts.join(' · ')), 'TRIGGER:PT' + hh + 'H' + mm + 'M', 'END:VALARM', 'END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  return { text: L.map(icsFold).join('\r\n') + '\r\n', count: Object.keys(days).length };
+}
+function downloadCalendar() {
+  if (!D.plants.length) { toast('Add plants first.'); return; }
+  const ics = buildIcs(8);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics.text], { type: 'text/calendar' }));
+  a.download = 'plant-care.ics'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(ics.count + ' plant days ready: tap “Add All” to put them in your calendar');
+}
+
 // ---------- Settings ----------
 function renderSettings() {
   const el = document.getElementById('tab-settings');
@@ -1279,12 +1398,14 @@ function renderSettings() {
        : '<div class="muted">Not set: seasons follow the northern hemisphere.</div>') +
     '</div><button class="btn small" data-setloc>' + (l ? 'Change' : 'Set') + '</button></div></div>';
   html += sharingCard();
+  html += remindersCard();
   html += climateCard();
   html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">' + (cloudActive() ? 'Your home is saved online. A backup file of its plants is still handy now and then.' : 'Your plants are saved on this phone. Save a backup file now and then.') + '</div>' +
     '<div class="row"><button class="btn grow" data-export>Save backup</button><button class="btn grow" data-import>Restore backup</button></div><input type="file" id="importInput" accept="application/json,.json" class="hidden"></div>';
   html += '<div class="card"><h2>About</h2><div class="muted">Plant Care · care advice is general guidance: always check the soil with a finger before watering.</div></div>';
   el.innerHTML = html;
   document.getElementById('importInput').onchange = importBackup;
+  const nt = document.getElementById('notifyTime'); if (nt) nt.onchange = () => saveNotifyTime(nt.value);
 }
 function exportBackup() {
   const blob = new Blob([JSON.stringify(D)], { type: 'application/json' });
@@ -1308,7 +1429,7 @@ function importBackup(e) {
 
 // ---------- One click handler for everything ----------
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload]');
+  const t = e.target.closest('[data-open],[data-add],[data-do],[data-snooze],[data-climate],[data-climate-save],[data-pick],[data-addsave],[data-addback],[data-photo],[data-compass],[data-compass-start],[data-compass-save],[data-dirpick],[data-dist],[data-saveplant],[data-delete],[data-unlog],[data-resetlearn],[data-setloc],[data-useloc],[data-citysearch],[data-cityi],[data-loclater],[data-export],[data-import],[data-signin],[data-signout],[data-joinhome],[data-declinehome],[data-usehome],[data-managehome],[data-newhome],[data-createhome],[data-invite],[data-uninvite],[data-sharelink],[data-renamehome],[data-movelocal],[data-removemember],[data-leavehome],[data-deletehome],[data-reload],[data-notifyon],[data-notifyoff],[data-notifytest],[data-calendar]');
   if (!t) return;
   const d = t.dataset;
   if (d.do) { act(findPlant(d.id), d.do); if (openPlantId) renderPlantPage(); return; }
@@ -1348,6 +1469,10 @@ document.addEventListener('click', e => {
   if (d.cityi) { const c = citySearch.results[+d.cityi]; setLocation({ lat: round2(c.latitude), lon: round2(c.longitude), name: c.name, country: c.country || '', source: 'search' }); closePage('locPage'); toast('Location: ' + c.name); return; }
   if ('loclater' in d) { D.settings.locAsked = true; save(); closePage('locPage'); return; }
   if ('reload' in d) return location.reload();
+  if ('notifyon' in d) return enableNotifications();
+  if ('notifyoff' in d) return disableNotifications();
+  if ('notifytest' in d) return testNotification();
+  if ('calendar' in d) return downloadCalendar();
   if ('signin' in d) return signIn();
   if ('signout' in d) return signOut();
   if (d.joinhome) return joinHome(cloud.invites.find(h => h.id === d.joinhome));
@@ -1385,7 +1510,7 @@ let lastDay = today().getTime();
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   if (today().getTime() !== lastDay) { lastDay = today().getTime(); render(); }
-  refreshWeather(); recheckLocation();
+  refreshWeather(); recheckLocation(); refreshDue();
 });
 </script>
 </body>
