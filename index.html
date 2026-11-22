@@ -577,7 +577,8 @@ function act(p, kind) {
 }
 function snoozeWater(p) {
   const before = snapshot();
-  p.factor = Math.min(1.6, (p.factor || 1) * 1.1); // soil still wet: learn that it dries slower
+  // soil still wet: learn that it dries slower (not before the first watering: nothing to compare with yet)
+  if (lastOf(p, 'water')) p.factor = Math.min(1.6, (p.factor || 1) * 1.1);
   p.snooze = { set: now().toISOString(), until: addDays(today(), 3).toISOString() };
   save(); render();
   toast('OK, ' + plantName(p) + ' is checked again in 3 days', before);
@@ -655,7 +656,7 @@ function renderToday() {
     else { what = '💦 Mist the leaves: the air is dry'; tag = '<span class="tag info">dry air</span>'; }
     html += '<div class="item"><div data-open="' + p.id + '">' + thumb(p) + '</div><div class="grow"><div class="name" data-open="' + p.id + '">' + esc(plantName(p)) + ' ' + tag + '</div><div class="muted">' + esc(what) + '</div>' +
       '<div class="actions" style="margin-top:6px">' +
-      (it.kind === 'water' && !it.never ? '<button class="btn small" data-snooze="' + p.id + '">Still wet</button>' : '') +
+      (it.kind === 'water' ? '<button class="btn small" data-snooze="' + p.id + '">Still wet</button>' : '') +
       '<button class="btn small primary" data-do="' + it.kind + '" data-id="' + p.id + '">✓ ' + { water: 'Watered', feed: 'Fed', mist: 'Misted' }[it.kind] + '</button></div></div></div>';
   }
   html += '</div>';
@@ -770,7 +771,7 @@ function renderPlantPage() {
   html += '<div class="kv"><span class="k">💧 Water</span><span class="v"><b>' + every(w.days) + '</b><br><span class="muted">when ' + esc(s.check) + '</span></span></div>';
   if (w.why.length) html += '<div class="kv"><span class="k">Adjusted for</span><span class="v muted">' + esc(w.why.join(' · ')) + '<br>(standard: ' + every(w.base) + ')</span></div>';
   html += '<div class="kv"><span class="k">Last watered</span><span class="v">' + (w.last ? ago(w.last) + ' (' + fmtDate(w.last) + ')' + (lastBy(p, 'water') ? '<br><span class="muted">by ' + esc(lastBy(p, 'water')) + '</span>' : '') : 'not logged yet') + '</span></div>';
-  html += '<div class="kv"><span class="k">Next water</span><span class="v">' + (w.never ? 'today, then on schedule' : w.due < 0 ? '<span class="tag late">' + (-w.due) + ' days late</span>' : inDays(w.due) + ' (' + fmtDate(w.next) + ')') + '</span></div>';
+  html += '<div class="kv"><span class="k">Next water</span><span class="v">' + (w.never && w.due <= 0 ? 'today, then on schedule' : w.due < 0 ? '<span class="tag late">' + (-w.due) + ' days late</span>' : inDays(w.due) + ' (' + fmtDate(w.next) + ')') + '</span></div>';
   html += '<div class="kv"><span class="k">🧪 Feed</span><span class="v">' + (f.days ? every(f.days) + '<br><span class="muted">next ' + (f.due <= 0 ? 'today' : inDays(f.due)) + '</span>' : 'no fertilizer this season') + '</span></div>';
   html += '<div class="muted" style="margin-top:8px">' + esc(s.tips[season]) + '</div>';
   html += '<div class="actions" style="margin-top:10px"><button class="btn small" data-do="feed" data-id="' + p.id + '">✓ Fed</button><button class="btn small primary" data-do="water" data-id="' + p.id + '">✓ Watered</button></div></div>';
