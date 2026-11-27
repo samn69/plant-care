@@ -30,7 +30,7 @@ function loadApp({ today = '2026-11-27', storage = {}, navigator = {} } = {}) {
   };
   ctx.window = ctx; ctx.self = ctx; ctx.__NOW = today + 'T10:00:00';
   vm.createContext(ctx);
-  vm.runInContext(code + '\n;globalThis.app = { get D() { return D; }, get LIB() { return LIB; }, get cloud() { return cloud; }, get tab() { return tab; }, set tab(v) { tab = v; } };', ctx, { filename: 'index.html' });
+  vm.runInContext(code + '\n;globalThis.app = { get D() { return D; }, get LIB() { return LIB; }, get cloud() { return cloud; }, get tab() { return tab; }, set tab(v) { tab = v; }, set draft(v) { draft = v; } };', ctx, { filename: 'index.html' });
   ctx.setToday = d => { ctx.__NOW = d + 'T10:00:00'; };
   ctx.el = byId; ctx.storage = store;
   return ctx;

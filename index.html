@@ -890,6 +890,7 @@ function saveDraft() {
   if (!save()) { D.plants.pop(); return; }
   closePage('addPage'); tab = 'plants'; render();
   toast(plantName(p) + ' added');
+  if (!cloudActive() && storageKept !== true) keepStorage(true); // now there is something to keep
 }
 
 // ---------- Identify from a photo (Pl@ntNet, free: 500 a day) ----------
@@ -1722,6 +1723,24 @@ function downloadCalendar() {
   toast(ics.count + ' plant days ready: tap “Add All” to put them in your calendar');
 }
 
+// ---------- Keeping the data on this phone ----------
+// Browsers may clear a site's storage to free space. This asks the browser to keep it instead (it decides
+// itself; apps on the home screen usually get it). Only asked once there are plants on this phone, as some
+// browsers show a question. Shown in Settings → Backup.
+let storageKept = null; // true / false, or null while unknown or not supported
+async function keepStorage(ask) {
+  const s = navigator.storage; if (!s || !s.persisted) return;
+  try { storageKept = await s.persisted(); if (!storageKept && ask && s.persist) storageKept = await s.persist(); } catch (e) {}
+  if (tab === 'settings') render();
+}
+function backupText() {
+  if (cloudActive()) return '<div class="muted" style="margin-bottom:10px">Your home is saved online. A backup file of its plants is still handy now and then. Restoring adds the plants from the file that are not in the home; nothing in the home is replaced.</div>';
+  if (storageKept === true) return '<div class="muted" style="margin-bottom:10px">✅ Your plants are saved on this phone, and the browser keeps them: it does not clear them to free space. A backup file is still handy for a new phone.</div>';
+  if (storageKept === false && localPlantCount()) return '<div class="note warn">⚠️ Your plants are saved only on this phone, and the browser may clear them when space runs low' +
+    (isIOS() && !isStandalone() ? ', or after about a week without opening the app in Safari. Adding it to the Home Screen (Share → Add to Home Screen) keeps them safer.' : '.') + ' Save a backup file now and then.</div>';
+  return '<div class="muted" style="margin-bottom:10px">Your plants are saved on this phone. Save a backup file now and then.</div>';
+}
+
 // ---------- Settings ----------
 function renderSettings() {
   const el = document.getElementById('tab-settings');
@@ -1734,7 +1753,7 @@ function renderSettings() {
   html += remindersCard();
   html += holidayCard('settings');
   html += climateCard();
-  html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">' + (cloudActive() ? 'Your home is saved online. A backup file of its plants is still handy now and then. Restoring adds the plants from the file that are not in the home; nothing in the home is replaced.' : 'Your plants are saved on this phone. Save a backup file now and then.') + '</div>' +
+  html += '<div class="card"><h2>Backup</h2>' + backupText() +
     '<div class="row"><button class="btn grow" data-export>Save backup</button><button class="btn grow" data-import>' + (cloudActive() ? 'Add from backup' : 'Restore backup') + '</button></div><input type="file" id="importInput" accept="application/json,.json" class="hidden"></div>';
   html += '<div class="card"><h2>About</h2><div class="muted">Plant Care · care advice is general guidance: always check the soil with a finger before watering.</div></div>';
   el.innerHTML = html;
@@ -1858,7 +1877,7 @@ document.addEventListener('click', e => {
 render();
 // First start: ask where the plants are (a page, not a pop-up); Later skips it.
 if (!loc() && !D.settings.locAsked) openLocPage();
-refreshWeather(); recheckLocation(); initCloud();
+refreshWeather(); recheckLocation(); initCloud(); keepStorage(localPlantCount() > 0);
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 // The date changes while the app stays open (e.g. overnight): refresh when it comes back.
 let lastDay = today().getTime();
