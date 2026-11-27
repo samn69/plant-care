@@ -1,0 +1,25 @@
+name: Tests
+
+# On every pull request (the ✅ / ❌ next to it) and after each merge into main.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # No libraries to install: Node's own test runner, and Chrome is already on GitHub's machines.
+      - name: Run the tests
+        run: node --test tests/
+        env:
+          TZ: Europe/Berlin

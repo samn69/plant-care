@@ -31,3 +31,9 @@ The job's libraries are pinned in `scripts/package-lock.json`; to update them on
 `cd scripts && npm update && npm audit`, then commit both files.
 
 - **Identify from a photo** (Pl@ntNet, free, 500 a day): pick the match; plants not in the care guide get a basic routine (leafy, succulent, humidity lover) that can be changed. Needs a free key from my.plantnet.org in `PLANTNET_KEY`.
+
+## Tests
+`node --test tests/` (Node 20, nothing to install) checks the care logic, the data checks, backup restore,
+the reminder job, and, when Chrome is installed, the real app in headless Chrome with booby-trapped shared
+data. They run on every pull request (`.github/workflows/tests.yml`): merge when it shows ✅.
+The app's code is tested unchanged: `tests/helpers/app.js` loads it from `index.html`.
