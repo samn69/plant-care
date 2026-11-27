@@ -416,12 +416,15 @@ function feedStatus(p) {
   const next = addDays(from, days);
   return { days, season, last, next, due: daysBetween(today(), next) };
 }
-function needsMist(p) {
+// While the room air is too dry for it: from which day misting is due (the day after the last misting),
+// and the last day the room reading behind it still counts. null when it needs no misting.
+function mistDue(p) {
   const s = sp(p); const c = freshClimate();
-  if (!s.mist || !c || c.hum >= s.hum) return false;
+  if (!s.mist || !c || c.hum >= s.hum) return null;
   const last = lastOf(p, 'mist');
-  return !last || daysBetween(last, today()) >= 1;
+  return { from: isoDay(last ? addDays(last, 1) : today()), until: isoDay(addDays(c.at, CLIMATE_FRESH_DAYS)) };
 }
+function needsMist(p) { const m = mistDue(p); return !!m && m.from <= isoDay(today()); }
 function lightVerdict(p) {
   const s = sp(p); const L = lightScore(p); if (L == null) return null;
   const dir = dirOf(p.dir); const sill = (p.dist || 'near') === 'sill';
@@ -1572,9 +1575,10 @@ function sameKey(sub) {
 }
 function b64u(s) { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); }
 // What the reminder job reads: the next dates per plant, worked out here with the full care logic.
+// Misting is stored as dates (from / until) so the job stays right on days nobody opens the app.
 function computeDue(p) {
-  const w = waterStatus(p); const f = feedStatus(p);
-  return { water: isoDay(w.next), feed: f.days ? isoDay(f.next) : null, mist: needsMist(p), name: plantName(p) };
+  const w = waterStatus(p); const f = feedStatus(p); const m = mistDue(p);
+  return { water: isoDay(w.next), feed: f.days ? isoDay(f.next) : null, mist: m ? m.from : null, mistUntil: m ? m.until : null, name: plantName(p) };
 }
 function refreshDue() {
   if (!cloudActive() || cloud.loading) return;
