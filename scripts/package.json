@@ -1,0 +1,10 @@
+{
+  "name": "plant-care-reminders",
+  "private": true,
+  "description": "The daily reminder job (send-reminders.js), run by .github/workflows/reminders.yml. Exact versions are in package-lock.json.",
+  "engines": { "node": "20" },
+  "dependencies": {
+    "firebase-admin": "12.7.0",
+    "web-push": "3.6.7"
+  }
+}
