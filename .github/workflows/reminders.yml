@@ -21,8 +21,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install the two libraries the job needs
-        run: npm install --no-save --no-package-lock --no-audit --no-fund firebase-admin@12 web-push@3
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      # Exactly the versions in scripts/package-lock.json, never a newer one published in the meantime.
+      # No install scripts: the job does not need them, and they are how a hijacked library would run its code.
+      - name: Install the libraries the job needs
+        working-directory: scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Send reminders
         run: node scripts/send-reminders.js
         env:
