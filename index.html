@@ -601,7 +601,7 @@ document.getElementById('toastUndo').onclick = () => {
 // ---------- Helpers ----------
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function plantName(p) { return p.nick || sp(p).name; }
-function thumb(p, cls) { return p.photo ? '<img class="' + (cls || 'thumb') + '" src="' + p.photo + '" alt="">' : '<div class="' + (cls || 'thumb') + '">' + sp(p).emoji + '</div>'; }
+function thumb(p, cls) { return p.photo ? '<img class="' + (cls || 'thumb') + '" src="' + esc(p.photo) + '" alt="">' : '<div class="' + (cls || 'thumb') + '">' + sp(p).emoji + '</div>'; }
 function findPlant(id) { return D.plants.find(p => p.id === id); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function rooms() { return [...new Set(D.plants.map(p => p.room).filter(Boolean))].sort(); }
@@ -760,7 +760,7 @@ function renderPlantPage() {
   const oldNick = document.getElementById('ppNick'), oldRoom = document.getElementById('ppRoom');
   const typed = oldNick && oldNick.dataset.pid === p.id ? { nick: oldNick.value, room: oldRoom.value } : { nick: p.nick || '', room: p.room || '' };
   document.getElementById('plantPageTitle').textContent = plantName(p);
-  let html = '<div data-photo="' + p.id + '">' + (p.photo ? '<img class="hero" src="' + p.photo + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
+  let html = '<div data-photo="' + p.id + '">' + (p.photo ? '<img class="hero" src="' + esc(p.photo) + '" alt="">' : '<div class="hero">' + s.emoji + '</div>') + '</div>';
   html += '<div class="row" style="margin:-4px 2px 12px"><div class="grow"><div style="font-size:20px;font-weight:700">' + esc(plantName(p)) + '</div><div class="muted"><i>' + esc(s.latin) + '</i>' + (p.room ? ' · ' + esc(p.room) : '') + '</div></div>' + '<button class="btn small" data-photo="' + p.id + '">' + (p.photo ? 'Change photo' : 'Add photo') + '</button></div>';
   if (s.toxic) html += '<div class="note warn">⚠️ Toxic to cats and dogs if chewed.</div>';
   if (s.generic) html += '<div class="card"><h2>' + s.emoji + ' Basic routine</h2><div class="muted" style="margin-bottom:8px">This plant is not in the care guide, so it follows a general routine. Pick the one that fits it best; the app also learns from when you water.' + (s.toxic === null ? ' It is not known here whether it is toxic to pets.' : '') + '</div>' +
@@ -801,7 +801,7 @@ function renderPlantPage() {
   html += '<div class="card"><h2>History</h2>';
   const log = p.log.slice().sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
   if (!log.length) html += '<div class="muted">Nothing logged yet.</div>';
-  for (const e of log) html += '<div class="kv"><span>' + { water: '💧 Watered', feed: '🧪 Fed', mist: '💦 Misted' }[e.t] + '</span><span class="v muted">' + (e.by ? esc(e.by) + ' · ' : '') + fmtDate(e.at) + ' · ' + ago(e.at) + ' <button class="linkbtn" data-unlog="' + esc(e.at) + '" data-t="' + e.t + '">Remove</button></span></div>';
+  for (const e of log) html += '<div class="kv"><span>' + { water: '💧 Watered', feed: '🧪 Fed', mist: '💦 Misted' }[e.t] + '</span><span class="v muted">' + (e.by ? esc(e.by) + ' · ' : '') + fmtDate(e.at) + ' · ' + ago(e.at) + ' <button class="linkbtn" data-unlog="' + esc(e.at) + '" data-t="' + esc(e.t) + '">Remove</button></span></div>';
   html += '</div>';
 
   // Details
@@ -1366,10 +1366,32 @@ function onUser(u) {
   }, () => {}));
   render();
 }
+// Plants and the room climate also come from other phones (shared homes) and from backup files, and the
+// app builds its pages from them as HTML. So everything is checked on the way in: texts are texts, numbers
+// are numbers, photos are real photos, and ids and kinds are only the ones the app makes itself.
+const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const LOG_KINDS = ['water', 'feed', 'mist'];
+function own(o, k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k); }
+function str(x, max) { return typeof x === 'string' ? x.slice(0, max || 200) : ''; }
+function num(x) { return typeof x === 'number' && isFinite(x) ? x : null; }
+function isDate(x) { return typeof x === 'string' && x.length <= 40 && !isNaN(Date.parse(x)); }
+function validPlant(p) { return !!p && typeof p.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(p.id) && own(LIB, p.sp); }
+function cleanClimate(c) {
+  if (!c || typeof c !== 'object') return null;
+  const temp = num(c.temp), hum = num(c.hum);
+  return temp != null && hum != null && isDate(c.at) ? { temp, hum, at: c.at } : null;
+}
+// Also the form a plant is saved in online; use it only on plants that passed validPlant.
 function norm(p) {
-  return { id: p.id, sp: p.sp, ...(p.common ? { common: p.common } : {}), ...(p.latin ? { latin: p.latin } : {}), nick: p.nick || '', room: p.room || '', photo: p.photo || null, dir: p.dir == null ? null : p.dir,
-    dist: p.dist || 'near', factor: p.factor || 1, added: p.added || now().toISOString(), snooze: p.snooze || null, due: p.due || null,
-    log: (p.log || []).map(e => e.by ? { t: e.t, at: e.at, by: e.by } : { t: e.t, at: e.at })
+  const common = str(p.common), latin = str(p.latin), dir = num(p.dir), factor = num(p.factor), sn = p.snooze;
+  return { id: p.id, sp: p.sp, ...(common ? { common } : {}), ...(latin ? { latin } : {}), nick: str(p.nick), room: str(p.room),
+    photo: typeof p.photo === 'string' && PHOTO_RE.test(p.photo) ? p.photo : null, dir: dir == null ? null : ((dir % 360) + 360) % 360,
+    dist: own(DIST, p.dist) ? p.dist : 'near', factor: factor ? Math.max(0.6, Math.min(1.6, factor)) : 1,
+    added: isDate(p.added) ? p.added : now().toISOString(),
+    snooze: sn && isDate(sn.set) && isDate(sn.until) ? { set: sn.set, until: sn.until } : null,
+    due: p.due && typeof p.due === 'object' ? p.due : null,
+    log: (Array.isArray(p.log) ? p.log : []).filter(e => e && LOG_KINDS.includes(e.t) && isDate(e.at))
+      .map(e => str(e.by, 60) ? { t: e.t, at: e.at, by: str(e.by, 60) } : { t: e.t, at: e.at })
       .sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.t < b.t ? -1 : a.t > b.t ? 1 : 0) };
 }
 function enterHome(id) {
@@ -1380,12 +1402,12 @@ function enterHome(id) {
   const ref = cloud.db.collection('homes').doc(id);
   cloud.unsub.push(ref.onSnapshot(s => {
     if (!s.exists) return;
-    cloud.home = Object.assign({ id }, s.data()); D.climate = cloud.home.climate || null; cloud.climateJson = JSON.stringify(D.climate);
+    cloud.home = Object.assign({ id }, s.data()); D.climate = cleanClimate(cloud.home.climate); cloud.climateJson = JSON.stringify(D.climate);
     render(); if (openPlantId) renderPlantPage();
     if (document.getElementById('homePage').classList.contains('open')) renderHomePage();
   }, () => {}));
   cloud.unsub.push(ref.collection('plants').onSnapshot(s => {
-    const plants = s.docs.map(d => norm(Object.assign({}, d.data(), { id: d.id }))).filter(p => LIB[p.sp]);
+    const plants = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).filter(validPlant).map(norm);
     cloud.synced = {}; for (const p of plants) cloud.synced[p.id] = JSON.stringify(p);
     D.plants = plants; cloud.loading = false;
     render(); if (openPlantId) renderPlantPage();
@@ -1504,10 +1526,10 @@ function sharingCard() {
   html += '<div class="row" style="margin-bottom:6px"><div class="grow"><b>' + esc(cloud.user.displayName || myName()) + '</b><div class="muted">' + esc(myEmail()) + '</div></div><button class="btn small" data-signout>Sign out</button></div>';
   for (const h of cloud.invites) {
     const from = h.names && h.names[h.owner] ? h.names[h.owner].name : 'Someone';
-    html += '<div class="note season" style="margin-top:8px">📩 <b>' + esc(from) + '</b> invited you to <b>' + esc(h.name) + '</b>.<div class="actions" style="margin-top:8px"><button class="btn small" data-declinehome="' + h.id + '">No thanks</button><button class="btn small primary" data-joinhome="' + h.id + '">Join</button></div></div>';
+    html += '<div class="note season" style="margin-top:8px">📩 <b>' + esc(from) + '</b> invited you to <b>' + esc(h.name) + '</b>.<div class="actions" style="margin-top:8px"><button class="btn small" data-declinehome="' + esc(h.id) + '">No thanks</button><button class="btn small primary" data-joinhome="' + esc(h.id) + '">Join</button></div></div>';
   }
   html += '<div class="muted" style="margin:10px 0 4px">Show the plants of</div>';
-  for (const h of cloud.homes) html += '<div class="item" data-usehome="' + h.id + '" style="cursor:pointer"><div class="grow"><div class="name">🏠 ' + esc(h.name) + '</div><div class="muted">' + h.members.length + (h.members.length === 1 ? ' person' : ' people') + (h.owner === cloud.user.uid ? ' · yours' : '') + '</div></div>' + (h.id === cloud.homeId ? '<span class="tag ok">✓ shown</span>' : '') + '</div>';
+  for (const h of cloud.homes) html += '<div class="item" data-usehome="' + esc(h.id) + '" style="cursor:pointer"><div class="grow"><div class="name">🏠 ' + esc(h.name) + '</div><div class="muted">' + h.members.length + (h.members.length === 1 ? ' person' : ' people') + (h.owner === cloud.user.uid ? ' · yours' : '') + '</div></div>' + (h.id === cloud.homeId ? '<span class="tag ok">✓ shown</span>' : '') + '</div>';
   html += '<div class="item" data-usehome="" style="cursor:pointer"><div class="grow"><div class="name">📱 This phone only</div><div class="muted">' + localPlantCount() + ' plants, not shared</div></div>' + (!cloud.homeId ? '<span class="tag ok">✓ shown</span>' : '') + '</div>';
   if (cloud.homeId && cloud.home) html += '<button class="btn wide" style="margin-top:10px" data-managehome>Manage “' + esc(cloud.home.name) + '”: people & invitations</button>';
   const n = localPlantCount();
@@ -1528,7 +1550,7 @@ function renderHomePage() {
   for (const id of h.members) {
     const n = (h.names || {})[id] || { name: 'Someone', email: '' };
     html += '<div class="item"><div class="thumb" style="font-size:20px">' + esc((n.name || '?').charAt(0).toUpperCase()) + '</div><div class="grow"><div class="name">' + esc(n.name) + (id === cloud.user.uid ? ' (you)' : '') + (id === h.owner ? ' <span class="tag info">created it</span>' : '') + '</div><div class="muted">' + esc(n.email) + '</div></div>' +
-      (mine && id !== h.owner ? '<button class="btn small danger" data-removemember="' + id + '">Remove</button>' : '') + '</div>';
+      (mine && id !== h.owner ? '<button class="btn small danger" data-removemember="' + esc(id) + '">Remove</button>' : '') + '</div>';
   }
   html += '</div>';
   if (mine) {
@@ -1714,8 +1736,8 @@ function importBackup(e) {
   const r = new FileReader();
   r.onload = () => {
     let d; try { d = JSON.parse(r.result); } catch (err) {}
-    if (!d || !Array.isArray(d.plants) || d.plants.some(p => !p || !LIB[p.sp])) { toast('That file is not a Plant Care backup.'); return; }
-    restoreBackup(d);
+    if (!d || !Array.isArray(d.plants) || !d.plants.every(validPlant)) { toast('That file is not a Plant Care backup.'); return; }
+    restoreBackup({ plants: d.plants.map(norm), climate: cleanClimate(d.climate) });
   };
   r.readAsText(file);
 }
