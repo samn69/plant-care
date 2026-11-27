@@ -1695,8 +1695,8 @@ function renderSettings() {
   html += remindersCard();
   html += holidayCard('settings');
   html += climateCard();
-  html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">' + (cloudActive() ? 'Your home is saved online. A backup file of its plants is still handy now and then.' : 'Your plants are saved on this phone. Save a backup file now and then.') + '</div>' +
-    '<div class="row"><button class="btn grow" data-export>Save backup</button><button class="btn grow" data-import>Restore backup</button></div><input type="file" id="importInput" accept="application/json,.json" class="hidden"></div>';
+  html += '<div class="card"><h2>Backup</h2><div class="muted" style="margin-bottom:10px">' + (cloudActive() ? 'Your home is saved online. A backup file of its plants is still handy now and then. Restoring adds the plants from the file that are not in the home; nothing in the home is replaced.' : 'Your plants are saved on this phone. Save a backup file now and then.') + '</div>' +
+    '<div class="row"><button class="btn grow" data-export>Save backup</button><button class="btn grow" data-import>' + (cloudActive() ? 'Add from backup' : 'Restore backup') + '</button></div><input type="file" id="importInput" accept="application/json,.json" class="hidden"></div>';
   html += '<div class="card"><h2>About</h2><div class="muted">Plant Care · care advice is general guidance: always check the soil with a finger before watering.</div></div>';
   el.innerHTML = html;
   document.getElementById('importInput').onchange = importBackup;
@@ -1713,14 +1713,25 @@ function importBackup(e) {
   const file = e.target.files[0]; if (!file) return;
   const r = new FileReader();
   r.onload = () => {
-    try {
-      const d = JSON.parse(r.result);
-      if (!d || !Array.isArray(d.plants) || d.plants.some(p => !LIB[p.sp])) throw new Error('bad');
-      const before = snapshot(); D.plants = d.plants; D.climate = d.climate || null; save(); render();
-      toast('Backup restored: ' + D.plants.length + ' plants', before);
-    } catch (err) { toast('That file is not a Plant Care backup.'); }
+    let d; try { d = JSON.parse(r.result); } catch (err) {}
+    if (!d || !Array.isArray(d.plants) || d.plants.some(p => !p || !LIB[p.sp])) { toast('That file is not a Plant Care backup.'); return; }
+    restoreBackup(d);
   };
   r.readAsText(file);
+}
+// On this phone a backup replaces its plants. In a shared home it only adds the plants the home does not
+// have (e.g. ones deleted since): replacing would delete everyone else's newer plants, and the home's climate stays.
+function restoreBackup(d) {
+  const before = snapshot();
+  if (!cloudActive()) {
+    D.plants = d.plants; D.climate = d.climate || null; save(); render();
+    toast('Backup restored: ' + D.plants.length + ' plants', before); return;
+  }
+  const have = new Set(D.plants.map(p => p.id));
+  const add = d.plants.filter(p => !have.has(p.id));
+  if (!add.length) { toast('All plants in that backup are already in this home.'); return; }
+  D.plants = D.plants.concat(add); save(); render();
+  toast('Added ' + add.length + (add.length === 1 ? ' plant' : ' plants') + ' from the backup', before);
 }
 
 // ---------- One click handler for everything ----------
