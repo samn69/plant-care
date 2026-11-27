@@ -14,6 +14,13 @@ function localParts(date, tz) {
 }
 function validTz(tz) { try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch (e) { return false; } }
 
+// Misting is due from due.mist (a date) until due.mistUntil, the last day the room reading behind it counts.
+// Plants last saved by an older app version have true / false instead: kept as they are until the app rewrites them.
+function mistDueOn(due, date) {
+  if (typeof due.mist === 'string') return due.mist <= date && (!due.mistUntil || date <= due.mistUntil);
+  return due.mist === true;
+}
+
 function message(groups) {
   // groups: [{ home, water: [], feed: [], mist: [] }]
   const lines = []; let count = 0;
@@ -51,7 +58,7 @@ async function run({ db, sendPush, now = new Date(), log = console.log, FieldVal
         const x = p.data() || {}; const due = x.due || {}; const name = due.name || x.nick || 'A plant';
         if (due.water && due.water <= date) g.water.push(name);
         if (due.feed && due.feed <= date) g.feed.push(name);
-        if (due.mist) g.mist.push(name);
+        if (mistDueOn(due, date)) g.mist.push(name);
       }
       groups.push(g);
     }
@@ -86,4 +93,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
-module.exports = { run, message, localParts };
+module.exports = { run, message, localParts, mistDueOn };
