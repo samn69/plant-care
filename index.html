@@ -413,8 +413,21 @@ function feedStatus(p) {
   const season = seasonOf(now()); const days = sp(p).feed[season];
   if (!days) return { days: 0, season };
   const last = lastOf(p, 'feed'); const from = last || p.added;
-  const next = addDays(from, days);
+  let next = addDays(from, days);
+  // after the seasons without feeding, the first feeding is due the day feeding starts again (not months "late")
+  const since = feedingSince(p, today()); if (since && next < since) next = since;
   return { days, season, last, next, due: daysBetween(today(), next) };
+}
+// First day of the stretch of feeding seasons that day d is in (e.g. 1 March after a winter without
+// feeding); null for a plant fed all year round.
+function feedingSince(p, d) {
+  let start = seasonStarts(d).prev;
+  for (let i = 0; i < 4; i++) {
+    const before = addDays(start, -1);
+    if (!sp(p).feed[seasonOf(before)]) return start;
+    start = seasonStarts(before).prev;
+  }
+  return null;
 }
 function needsMist(p) {
   const s = sp(p); const c = freshClimate();
